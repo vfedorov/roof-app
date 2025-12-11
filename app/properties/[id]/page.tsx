@@ -14,8 +14,8 @@ export default async function PropertyDetailPage({params}: PageProps<'/propertie
   if (!property) return <div>Property not found</div>;
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h1 className="text-xl font-bold mb-4">{property.name}</h1>
+    <div className="form-control">
+      <h1 className="form-title">{property.name}</h1>
 
       <div className="space-y-2 mb-6">
         <div><strong>Address:</strong> {property.address}</div>

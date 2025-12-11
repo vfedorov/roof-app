@@ -14,8 +14,8 @@ export default async function EditInspectionPage({params}: PageProps<'/inspectio
   const {data: inspectors} = await supabase.from("users").select("id, name").eq("role", "inspector");
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h1 className="text-xl font-bold mb-4">Edit Inspection</h1>
+    <div className="form-control">
+      <h1 className="form-title">Edit Inspection</h1>
 
 
       <EditInspectionForm id={id} inspection={inspection} inspectors={inspectors} properties={properties}/>

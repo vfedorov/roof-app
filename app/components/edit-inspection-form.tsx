@@ -21,8 +21,8 @@ export function EditInspectionForm({id, inspection, inspectors, properties}: {
   }
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h1 className="text-xl font-bold mb-4">Edit Inspection</h1>
+    <div className="form-control">
+      <h1 className="form-title">Edit Inspection</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
 

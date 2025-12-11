@@ -3,11 +3,6 @@
 import {useTransition} from "react";
 import {useToast} from "@/app/components/hooks/use-toast";
 
-/**
- * Универсальный хук для server actions с toast
- * @param action - server action (async функция)
- * @param options - опциональные сообщения
- */
 export function useServerAction<T extends (...args: any[]) => Promise<any>>(
   action: T,
   options?: {

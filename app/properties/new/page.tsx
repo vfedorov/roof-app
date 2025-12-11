@@ -1,9 +1,9 @@
-import { createProperty } from "../actions";
+import {createProperty} from "../actions";
 
 export default function NewPropertyPage() {
     return (
-        <div className="p-6 max-w-xl mx-auto">
-            <h1 className="text-xl font-bold mb-4">Add New Property</h1>
+        <div className="form-control">
+            <h1 className="form-title">Add New Property</h1>
 
             <form action={createProperty} className="space-y-4">
 

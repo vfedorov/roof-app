@@ -107,3 +107,11 @@ textarea {
 .text-danger {
   @apply text-red-500 dark:text-red-700 dark:text-red-400;
 }
+
+.form-control {
+  @apply p-6 max-w-xl mx-auto;
+}
+
+.form-title {
+  @apply text-xl font-bold mb-4;
+}

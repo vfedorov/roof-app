@@ -2,6 +2,7 @@
 
 import {supabase} from "@/lib/supabase";
 import {revalidatePath} from "next/cache";
+import {redirect} from "next/navigation";
 
 export async function createInspection(formData: FormData) {
   const property_id = formData.get("property_id") as string;
@@ -10,22 +11,21 @@ export async function createInspection(formData: FormData) {
   const roof_type = formData.get("roof_type") as string;
   const summary_notes = formData.get("summary_notes") as string;
 
-  const {error} = await supabase.from("inspections").insert({
+  const { data, error } = await supabase.from("inspections").insert({
     property_id,
     inspector_id,
     date,
     roof_type,
     summary_notes,
-  });
+  }).select("id")
+    .single();
 
   if (error) {
-    return { ok: false,  message: error.message };
+    throw new Error(error.message);
   }
+
   revalidatePath("/inspections");
-
-
-
-     return {ok: true}
+  redirect(`/inspections/${data.id}`);
 }
 
 export async function updateInspection(id: string, formData: FormData) {
@@ -47,12 +47,8 @@ export async function updateInspection(id: string, formData: FormData) {
   return {ok: true}
 }
 
-export async function deleteInspection(id: string) {
+export async function deleteInspection(id: string, _formData: FormData) {
   const {error} = await supabase.from("inspections").delete().eq("id", id);
-
-  if (error) {
-    return {ok: false, message: error.message};
-  }
   revalidatePath("/inspections");
-  return {ok: true}
+  redirect(`/inspections`);
 }

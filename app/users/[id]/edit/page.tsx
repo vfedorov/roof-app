@@ -2,19 +2,24 @@ import {supabase} from "@/lib/supabase";
 import {EditUserForm} from "@/app/components/edit-user-form";
 
 
-export default async function EditUserPage({params}: PageProps<'/users/[id]/edit'>) {
-  const {id} = await params;
+export default async function EditUserPage({ params }: PageProps<'/users/[id]/edit'>) {
+  const { id } = await params;
 
-  const {data: user} = await supabase
+  const { data: user } = await supabase
     .from("users")
     .select("*")
     .eq("id", id)
     .single();
 
+  if (!user) {
+    throw new Error("User not found");
+  }
+
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h1 className="text-xl font-bold mb-4">Edit User</h1>
+    <div className="form-control">
+      <h1 className="form-title">Edit User</h1>
       <EditUserForm id={id} user={user}/>
     </div>
   );
 }
+

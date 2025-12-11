@@ -3,6 +3,7 @@
 import {supabase} from "@/lib/supabase";
 import {revalidatePath} from "next/cache";
 import bcrypt from "bcryptjs";
+import {redirect} from "next/navigation";
 
 export async function createUser(formData: FormData) {
   const name = formData.get("name") as string;
@@ -12,15 +13,25 @@ export async function createUser(formData: FormData) {
 
   const password_hash = await bcrypt.hash(password, 10);
 
-  await supabase.from("users").insert({
-    name,
-    email,
-    password_hash,
-    role
-  });
+  const { data, error } = await supabase
+    .from("users")
+    .insert({
+      name,
+      email,
+      password_hash,
+      role,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
 
   revalidatePath("/users");
+  redirect(`/users/${data.id}`);
 }
+
 
 export async function updateUser(id: string, formData: FormData) {
   const name = formData.get("name") as string;
@@ -44,4 +55,5 @@ export async function updateUser(id: string, formData: FormData) {
 export async function deleteUser(id: string) {
   await supabase.from("users").delete().eq("id", id);
   revalidatePath("/users");
+  redirect(`/users`);
 }

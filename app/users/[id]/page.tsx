@@ -10,8 +10,8 @@ export default async function UserDetailPage({params}: PageProps<'/users/[id]'>)
   if (!user) return <div>User not found</div>;
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h1 className="text-xl font-bold mb-4">{user.name}</h1>
+    <div className="form-control">
+      <h1 className="form-title">{user.name}</h1>
 
       <div className="space-y-2 mb-6">
         <div><strong>Email:</strong> {user.email}</div>

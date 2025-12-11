@@ -1,13 +1,13 @@
-import { createInspection } from "../actions";
-import { supabase } from "@/lib/supabase";
+import {createInspection} from "../actions";
+import {supabase} from "@/lib/supabase";
 
 export default async function NewInspectionPage() {
     const { data: properties } = await supabase.from("properties").select("id, name");
     const { data: inspectors } = await supabase.from("users").select("id, name").eq("role", "inspector");
 
     return (
-        <div className="p-6 max-w-xl mx-auto">
-            <h1 className="text-xl font-bold mb-4">New Inspection</h1>
+        <div className="form-control">
+            <h1 className="form-title">New Inspection</h1>
 
             <form action={createInspection} className="space-y-4">
                 <select name="property_id" className="border p-2 w-full" required>

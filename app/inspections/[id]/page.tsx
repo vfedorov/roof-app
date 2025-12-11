@@ -14,8 +14,8 @@ export default async function InspectionDetailPage({params}: PageProps<'/inspect
   if (!inspection) return <div>Inspection not found</div>;
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h1 className="text-xl font-bold mb-4">
+    <div className="form-control">
+      <h1 className="form-title">
         Inspection — {inspection.properties.name}
       </h1>
 

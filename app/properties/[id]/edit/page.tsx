@@ -1,29 +1,21 @@
 import {supabase} from "@/lib/supabase";
-import {updateProperty} from "../../actions";
+import {EditPropertyForm} from "@/app/components/EditPropertyForm";
 
 export default async function EditPropertyPage({params}: PageProps<'/properties/[id]/edit'>) {
-  const {id} = await params;
+  const { id } = await params;
 
-  const {data: property} = await supabase
+  const { data: property } = await supabase
     .from("properties")
     .select("*")
     .eq("id", id)
     .single();
 
+  if (!property) throw new Error("Property not found");
+
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h1 className="text-xl font-bold mb-4">Edit Property</h1>
-
-      <form action={updateProperty.bind(null, id)} className="space-y-4">
-        <input name="name" defaultValue={property.name} className="border p-2 w-full"/>
-        <input name="address" defaultValue={property.address} className="border p-2 w-full"/>
-        <input name="city" defaultValue={property.city} className="border p-2 w-full"/>
-        <input name="state" defaultValue={property.state} className="border p-2 w-full"/>
-        <input name="zip" defaultValue={property.zip} className="border p-2 w-full"/>
-        <textarea name="notes" defaultValue={property.notes} className="border p-2 w-full"/>
-
-        <button type="submit" className="btn">Update</button>
-      </form>
+    <div className="form-control">
+      <h1 className="form-title">Edit Property</h1>
+      <EditPropertyForm id={id} property={property} />
     </div>
   );
 }

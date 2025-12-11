@@ -1,16 +1,18 @@
 import Link from "next/link";
 import {supabase} from "@/lib/supabase";
+import {getUser} from "@/lib/auth";
 
 export default async function PropertiesPage() {
+  const user = await getUser();
   const {data: properties} = await supabase.from("properties").select("*").order("created_at", {ascending: false});
 
   return (
     <div className="page">
       <div className="header">
         <h1>Properties</h1>
-        <Link href="/properties/new" className="btn">
-          Add Property
-        </Link>
+        {user.role === "admin" && (
+          <Link className="btn" href="/properties/new">+ Add Property</Link>
+        )}
       </div>
 
       <div className="list">

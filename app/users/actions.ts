@@ -4,8 +4,14 @@ import {supabase} from "@/lib/supabase";
 import {revalidatePath} from "next/cache";
 import bcrypt from "bcryptjs";
 import {redirect} from "next/navigation";
+import {getUser} from "@/lib/auth";
 
 export async function createUser(formData: FormData) {
+  const user = await getUser();
+  if (!user || user.role !== "admin"){
+    throw new Error("Not allowed");
+  }
+
   const name = formData.get("name") as string;
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
@@ -34,6 +40,11 @@ export async function createUser(formData: FormData) {
 
 
 export async function updateUser(id: string, formData: FormData) {
+  const user = await getUser();
+  if (!user || user.role !== "admin"){
+    throw new Error("Not allowed");
+  }
+
   const name = formData.get("name") as string;
   const email = formData.get("email") as string;
   const role = formData.get("role") as string;
@@ -53,6 +64,11 @@ export async function updateUser(id: string, formData: FormData) {
 }
 
 export async function deleteUser(id: string) {
+  const user = await getUser();
+  if (!user || user.role !== "admin"){
+    throw new Error("Not allowed");
+  }
+  
   await supabase.from("users").delete().eq("id", id);
   revalidatePath("/users");
   redirect(`/users`);

@@ -1,18 +1,27 @@
-// middleware.ts
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import {NextRequest, NextResponse} from "next/server";
+import {getUser} from "@/lib/auth";
 
-export function middleware(req: NextRequest) {
-    const session = req.cookies.get("session")?.value;
-    const { pathname } = req.nextUrl;
+export async function middleware(req: NextRequest) {
+    const user = await getUser();
+    const url = req.nextUrl.pathname;
 
-    const isLoginPage = pathname.startsWith("/login");
+    const isLogin = url.startsWith("/login");
 
-    if (!session && !isLoginPage) {
+    if (!user && !isLogin) {
         return NextResponse.redirect(new URL("/login", req.url));
     }
 
-    if (session && isLoginPage) {
+    if (user && isLogin) {
+        return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+
+    const adminOnly = [
+        "/users",
+        "/properties/new",
+        "/users/new",
+    ];
+
+    if (adminOnly.some(u => url.startsWith(u)) && user.role !== "admin") {
         return NextResponse.redirect(new URL("/dashboard", req.url));
     }
 

@@ -1,10 +1,19 @@
 import Link from "next/link";
 import {supabase} from "@/lib/supabase";
+import {getUser} from "@/lib/auth";
 
 export default async function InspectionsPage() {
-  const {data: inspections} = await supabase
+  const user = await getUser();
+
+  let query = supabase
     .from("inspections")
     .select("*, properties(name), users(name)");
+
+  if (user.role === "inspector") {
+    query = query.eq("inspector_id", user.id);
+  }
+
+  const { data: inspections } = await query;
 
   return (
     <div className="page">

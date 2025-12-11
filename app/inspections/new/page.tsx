@@ -1,35 +1,76 @@
-import {createInspection} from "../actions";
 import {supabase} from "@/lib/supabase";
+import {getUser} from "@/lib/auth";
+import {createInspection} from "../actions";
 
 export default async function NewInspectionPage() {
-    const { data: properties } = await supabase.from("properties").select("id, name");
-    const { data: inspectors } = await supabase.from("users").select("id, name").eq("role", "inspector");
+    const user = await getUser();
+
+    const { data: properties } = await supabase
+      .from("properties")
+      .select("id, name")
+      .order("name");
+
+    let inspectors: { id: string; name: string }[] = [];
+    if (user.role === "admin") {
+        const res = await supabase.from("users").select("id, name").eq("role", "inspector");
+        inspectors = res.data ?? [];
+    }
 
     return (
-        <div className="form-control">
-            <h1 className="form-title">New Inspection</h1>
+      <div className="p-6 max-w-xl mx-auto">
+          <h1 className="text-2xl font-bold mb-6">New Inspection</h1>
 
-            <form action={createInspection} className="space-y-4">
-                <select name="property_id" className="border p-2 w-full" required>
-                    <option value="">Select Property</option>
-                    {properties?.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                </select>
+          <form action={createInspection} className="space-y-4">
 
-                <select name="inspector_id" className="border p-2 w-full" required>
-                    <option value="">Select Inspector</option>
-                    {inspectors?.map((u) => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                </select>
+              <div>
+                  <label className="block mb-1 font-medium">Property</label>
+                  <select name="property_id" className="select" required>
+                      <option value="">Select Property</option>
+                      {properties?.map((p) => (
+                        <option key={p.id} value={p.id}>
+                            {p.name}
+                        </option>
+                      ))}
+                  </select>
+              </div>
 
-                <input type="date" name="date" className="border p-2 w-full" required />
-                <input name="roof_type" placeholder="Roof Type" className="border p-2 w-full" />
-                <textarea name="summary_notes" placeholder="Summary Notes" className="border p-2 w-full" />
+              {user.role === "admin" ? (
+                <div>
+                    <label className="block mb-1 font-medium">Inspector</label>
+                    <select name="inspector_id" className="select" required>
+                        <option value="">Select Inspector</option>
+                        {inspectors.map((i) => (
+                          <option key={i.id} value={i.id}>
+                              {i.name}
+                          </option>
+                        ))}
+                    </select>
+                </div>
+              ) : (
+                <input type="hidden" name="inspector_id" value={user.id} />
+              )}
 
-                <button className="bg-black text-white px-4 py-2 rounded">Create</button>
-            </form>
-        </div>
+              {/* DATE */}
+              <div>
+                  <label className="block mb-1 font-medium">Inspection Date</label>
+                  <input type="date" name="date" className="input" required />
+              </div>
+
+              {/* ROOF TYPE */}
+              <div>
+                  <label className="block mb-1 font-medium">Roof Type</label>
+                  <input name="roof_type" placeholder="e.g. Asphalt Shingle" className="input" />
+              </div>
+
+              {/* NOTES */}
+              <div>
+                  <label className="block mb-1 font-medium">Summary Notes</label>
+                  <textarea name="summary_notes" className="textarea" placeholder="Write inspection notes..." />
+              </div>
+
+              {/* SUBMIT */}
+              <button className="btn w-full mt-4">Create Inspection</button>
+          </form>
+      </div>
     );
 }

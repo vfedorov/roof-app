@@ -3,8 +3,14 @@
 import {supabase} from "@/lib/supabase";
 import {revalidatePath} from "next/cache";
 import {redirect} from "next/navigation";
+import {getUser} from "@/lib/auth";
 
 export async function createProperty(formData: FormData) {
+    const user = await getUser();
+    if (!user || user.role !== "admin"){
+        throw new Error("Not allowed");
+    }
+
     const name = formData.get("name") as string;
     const address = formData.get("address") as string;
     const city = formData.get("city") as string;
@@ -31,6 +37,11 @@ export async function createProperty(formData: FormData) {
 }
 
 export async function updateProperty(id: string, formData: FormData) {
+    const user = await getUser();
+    if (!user || user.role !== "admin"){
+        throw new Error("Not allowed");
+    }
+
     const name = formData.get("name");
     const address = formData.get("address");
     const city = formData.get("city");
@@ -52,6 +63,11 @@ export async function updateProperty(id: string, formData: FormData) {
 }
 
 export async function deleteProperty(id: string) {
+    const user = await getUser();
+    if (!user || user.role !== "admin"){
+        throw new Error("Not allowed");
+    }
+    
     await supabase.from("properties").delete().eq("id", id);
     revalidatePath("/properties");
     redirect("/properties");

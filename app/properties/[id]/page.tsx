@@ -1,8 +1,10 @@
 import {supabase} from "@/lib/supabase";
 import Link from "next/link";
 import {deleteProperty} from "@/app/properties/actions";
+import {getUser} from "@/lib/auth";
 
 export default async function PropertyDetailPage({params}: PageProps<'/properties/[id]'>) {
+  const user = await getUser();
   const {id} = await params;
 
   const {data: property} = await supabase
@@ -25,16 +27,16 @@ export default async function PropertyDetailPage({params}: PageProps<'/propertie
         <div><strong>Notes:</strong> {property.notes}</div>
       </div>
 
-      <div className="flex gap-4">
-        <Link href={`/properties/${id}/edit`} className="btn">
-          Edit
-        </Link>
-
-        <Link href="#" onClick={deleteProperty.bind(null, id)} className="btn-danger">
-          Delete
-        </Link>
-
-      </div>
+      {user.role === "admin" &&
+        <div className="flex gap-4">
+          <Link href={`/properties/${id}/edit`} className="btn">
+            Edit
+          </Link>
+          <Link href="#" onClick={deleteProperty.bind(null, id)} className="btn-danger">
+            Delete
+          </Link>
+        </div>
+      }
     </div>
   );
 }

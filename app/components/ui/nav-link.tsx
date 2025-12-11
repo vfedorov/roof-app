@@ -18,8 +18,8 @@ export default function NavLink({ href, children }: { href: string; children: Re
                 "hover:bg-gray-100 dark:hover:bg-gray-800",
                 {
                     "font-semibold text-blue-600 dark:text-blue-400 bg-gray-100 dark:bg-gray-800":
-                    isActive,
-                }
+                        isActive,
+                },
             )}
         >
             {children}

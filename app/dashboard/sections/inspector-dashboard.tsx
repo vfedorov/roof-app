@@ -1,7 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import {InspectorDashboardProps, Inspection} from "@/types/next";
-
+import { InspectorDashboardProps, Inspection } from "@/types/next";
 
 export default async function InspectorDashboard(props: InspectorDashboardProps) {
     const { userId } = props;
@@ -10,12 +9,12 @@ export default async function InspectorDashboard(props: InspectorDashboardProps)
         supabase
             .from("inspections")
             .select("id, date, properties:property_id (id, name)")
-            .eq("inspector_id", userId)
+            .eq("inspector_id", userId),
     ]);
 
-    const typedInspections: Inspection[] = (inspections ?? []).map(i => ({
+    const typedInspections: Inspection[] = (inspections ?? []).map((i) => ({
         ...i,
-        properties: (i.properties)?.[0]
+        properties: i.properties?.[0],
     }));
 
     return (
@@ -23,10 +22,7 @@ export default async function InspectorDashboard(props: InspectorDashboardProps)
             <h1 className="text-2xl font-bold mb-6">Inspector Dashboard</h1>
 
             <div className="mb-6">
-                <Link
-                    href="/inspections/new"
-                    className="bg-black text-white px-4 py-2 rounded"
-                >
+                <Link href="/inspections/new" className="bg-black text-white px-4 py-2 rounded">
                     + Start Inspection
                 </Link>
             </div>

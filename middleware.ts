@@ -1,5 +1,5 @@
-import {NextRequest, NextResponse} from "next/server";
-import {getUser} from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { getUser } from "@/lib/auth";
 
 export async function middleware(req: NextRequest) {
     const user = await getUser();
@@ -15,13 +15,9 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(new URL("/dashboard", req.url));
     }
 
-    const adminOnly = [
-        "/users",
-        "/properties/new",
-        "/users/new",
-    ];
+    const adminOnly = ["/users", "/properties/new", "/users/new"];
 
-    if (adminOnly.some(u => url.startsWith(u)) && user.role !== "admin") {
+    if (adminOnly.some((u) => url.startsWith(u)) && user.role !== "admin") {
         return NextResponse.redirect(new URL("/dashboard", req.url));
     }
 

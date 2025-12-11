@@ -1,3 +1,3 @@
 "use client";
 
-export {useToast} from "@/app/components/providers/toast-provider";
+export { useToast } from "@/app/components/providers/toast-provider";

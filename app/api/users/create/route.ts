@@ -18,7 +18,7 @@ export async function POST(req: Request) {
         name,
         email,
         password_hash,
-        role
+        role,
     });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

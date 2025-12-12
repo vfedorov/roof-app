@@ -8,32 +8,42 @@ const projectRoot = dirname(__dirname);
 
 async function main() {
     try {
-        console.log("📦 Running postinstall: bundling Chromium for Vercel...");
+        console.log("📦 Starting postinstall script...");
 
-        const resolved = import.meta.resolve("@sparticuz/chromium");
-        const chromiumPath = resolved.replace(/^file:\/\//, "");
+        // Resolve chromium package location
+        const chromiumResolvedPath = import.meta.resolve("@sparticuz/chromium");
+
+        // Convert file:// URL to regular path
+        const chromiumPath = chromiumResolvedPath.replace(/^file:\/\//, "");
+
+        // Get the package root directory (goes up from build/esm/index.js to package root)
         const chromiumDir = dirname(dirname(dirname(chromiumPath)));
         const binDir = join(chromiumDir, "bin");
 
         if (!existsSync(binDir)) {
-            console.log("⚠️ Could not find Chromium bin/, skipping.");
+            console.log("⚠️  Chromium bin directory not found, skipping archive creation");
             return;
         }
 
+        // Create tar archive in public folder
         const publicDir = join(projectRoot, "public");
-        const outputPath = join(publicDir, "chromium-pack.tar.br");
+        const outputPath = join(publicDir, "chromium-pack.tar");
 
-        execSync(`mkdir -p "${publicDir}"`, { stdio: "inherit" });
+        console.log("📦 Creating chromium tar archive...");
+        console.log("   Source:", binDir);
+        console.log("   Output:", outputPath);
 
-        console.log("📦 Creating chromium-pack.tar.br ...");
-
-        execSync(`tar -c --use-compress-program=br -f "${outputPath}" -C "${binDir}" .`, {
+        // Tar the contents of bin/ directly (without bin prefix)
+        execSync(`mkdir -p ${publicDir} && tar -cf "${outputPath}" -C "${binDir}" .`, {
             stdio: "inherit",
+            cwd: projectRoot,
         });
 
-        console.log("✅ Chromium archive created at /public/chromium-pack.tar.br");
-    } catch (err) {
-        console.log("❌ postinstall failed but it's OK in dev:", err.message);
+        console.log("✅ Chromium archive created successfully!");
+    } catch (error) {
+        console.error("❌ Failed to create chromium archive:", error.message);
+        console.log("⚠️  This is not critical for local development");
+        process.exit(0); // Don't fail the install
     }
 }
 

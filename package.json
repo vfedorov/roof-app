@@ -10,6 +10,7 @@
     "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^143.0.0",
     "@sparticuz/chromium-min": "^143.0.0",
     "@supabase/supabase-js": "^2.87.1",
     "bcryptjs": "^3.0.3",

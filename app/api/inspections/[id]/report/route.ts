@@ -150,6 +150,14 @@ export async function GET(request: NextRequest, context: any) {
     const browser = await getBrowser();
     const page = await browser.newPage();
 
+    await page.setViewport({ width: 1200, height: 1800 });
+
+    // Allow loading of local static files on Vercel
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+        req.continue(); // critical
+    });
+
     await page.setContent(html, { waitUntil: "networkidle0" });
 
     const pdf = await page.pdf({

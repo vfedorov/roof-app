@@ -71,9 +71,15 @@ export default async function InspectionDetailPage({ params }: PageProps<"/inspe
                                 </p>
                                 <h2 className="text-lg font-semibold">PDF Report</h2>
                             </div>
-                            <button className="btn" disabled>
-                                Generate PDF (coming soon)
-                            </button>
+                            <form
+                                action={`/api/inspections/${id}/report`}
+                                method="GET"
+                                target="_blank"
+                            >
+                                <button className="btn" type="submit">
+                                    Generate PDF Report
+                                </button>
+                            </form>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-300">
                             Reports will include branding, property details, findings, and annotated

@@ -1,5 +1,6 @@
 import { supabaseServer } from "@/lib/supabase-server";
 import { type NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const BUCKET = "inspection-photos";
 const MAX_FILES = 20;
@@ -24,13 +25,11 @@ export async function POST(request: NextRequest, context: any) {
         const filename = `${crypto.randomUUID()}.${file.type.split("/")[1]}`;
         const path = `inspections/${id}/original/${filename}`;
 
-        const { error } = await supabaseServer.storage
-            .from("inspection-photos")
-            .upload(path, file, {
-                cacheControl: "0",
-                upsert: false,
-                contentType: file.type,
-            });
+        const { error } = await supabaseAdmin.storage.from(BUCKET).upload(path, file, {
+            cacheControl: "0",
+            upsert: false,
+            contentType: file.type,
+        });
 
         if (error) {
             return NextResponse.json({ error: error.message }, { status: 500 });
@@ -44,16 +43,12 @@ export async function GET(request: NextRequest, context: any) {
     const { id } = await context.params;
 
     // Get originals
-    const originals = await supabaseServer.storage
-        .from("inspection-photos")
-        .list(`inspections/${id}/original`);
+    const originals = await supabaseServer.storage.from(BUCKET).list(`inspections/${id}/original`);
 
     // Get annotated
-    const annotated = await supabaseServer.storage
-        .from("inspection-photos")
-        .list(`inspections/${id}/annotated`);
+    const annotated = await supabaseServer.storage.from(BUCKET).list(`inspections/${id}/annotated`);
 
-    const base = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/inspection-photos`;
+    const base = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${BUCKET}`;
 
     const photos: {
         name: string;

@@ -1,9 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import type React from "react";
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import React, { useEffect, useMemo, useState } from "react";
 
 const BUCKET = "inspection-photos";
 const MAX_FILES = 20;
@@ -16,190 +14,145 @@ type StoredPhoto = {
     kind: "original" | "annotated";
 };
 
-export default function PhotoManager({
-    inspectionId,
-    allowUpload = true,
-}: {
-    inspectionId: string;
-    allowUpload?: boolean;
-}) {
-    const [photos, setPhotos] = useState<StoredPhoto[]>([]);
-    const [isUploading, setIsUploading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+export default function PhotoManager({ inspectionId }: { inspectionId: string }) {
+    const [files, setFiles] = useState<File[]>([]);
+    const [storedPhotos, setStoredPhotos] = useState<StoredPhoto[]>([]);
+    const [loading, setLoading] = useState(false);
 
-    const originals = useMemo(() => photos.filter((p) => p.kind === "original"), [photos]);
-    const annotated = useMemo(() => photos.filter((p) => p.kind === "annotated"), [photos]);
+    console.log("---inspectionId", inspectionId);
+
+    // **************************
+    // Load existing photos
+    // **************************
+    async function loadPhotos() {
+        if (!inspectionId) return;
+
+        console.log("---load photos: ", inspectionId);
+
+        const res = await fetch(`/api/inspections/${inspectionId}/photos`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setStoredPhotos(data);
+    }
 
     useEffect(() => {
-        refreshPhotos();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        async function init() {
+            await loadPhotos(); // this calls setStoredPhotos safely
+        }
+        init();
     }, [inspectionId]);
 
-    async function refreshPhotos() {
-        const [originalList, annotatedList] = await Promise.all([
-            supabase.storage.from(BUCKET).list(`inspections/${inspectionId}/original`),
-            supabase.storage.from(BUCKET).list(`inspections/${inspectionId}/annotated`),
-        ]);
+    // **************************
+    // Handle file selection
+    // **************************
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) return;
 
-        const next: StoredPhoto[] = [];
+        const selected = Array.from(e.target.files);
 
-        if (!originalList.error) {
-            for (const file of originalList.data ?? []) {
-                const path = `inspections/${inspectionId}/original/${file.name}`;
-                const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-                if (data?.publicUrl) {
-                    next.push({ name: file.name, url: data.publicUrl, kind: "original" });
-                }
-            }
-        }
-
-        if (!annotatedList.error) {
-            for (const file of annotatedList.data ?? []) {
-                const path = `inspections/${inspectionId}/annotated/${file.name}`;
-                const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-                if (data?.publicUrl) {
-                    next.push({ name: file.name, url: data.publicUrl, kind: "annotated" });
-                }
-            }
-        }
-
-        setPhotos(next);
-    }
-
-    async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
-        const selected = Array.from(event.target.files || []);
-        setError(null);
-
-        if (!selected.length) return;
-
-        const currentCount = originals.length;
-        if (currentCount + selected.length > MAX_FILES) {
-            setError(`You can upload up to ${MAX_FILES} photos per inspection.`);
-            return;
-        }
-
-        const invalid = selected.find(
-            (file) => !ACCEPTED_TYPES.includes(file.type) || file.size > MAX_FILE_SIZE,
+        const valid = selected.filter(
+            (file) => ACCEPTED_TYPES.includes(file.type) && file.size <= MAX_FILE_SIZE,
         );
-        if (invalid) {
-            setError("Use JPG/PNG up to 10 MB each.");
+
+        if (valid.length + storedPhotos.length > MAX_FILES) {
+            alert(`You can only upload up to ${MAX_FILES} total photos.`);
             return;
         }
 
-        const body = new FormData();
-        for (const file of selected) {
-            body.append("files", file);
+        setFiles(valid);
+    };
+
+    // Generate previews
+    const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files]);
+
+    // **************************
+    // Upload selected photos
+    // **************************
+    const handleUpload = async () => {
+        if (!files.length) return;
+
+        const formData = new FormData();
+        files.forEach((f) => formData.append("files", f));
+
+        setLoading(true);
+
+        const res = await fetch(`/api/inspections/${inspectionId}/photos`, {
+            method: "POST",
+            body: formData,
+        });
+
+        setLoading(false);
+        setFiles([]);
+
+        if (res.ok) {
+            await loadPhotos(); // <-- refresh UI
+        } else {
+            const err = await res.json();
+            alert("Upload failed: " + err.error);
         }
-
-        setIsUploading(true);
-        try {
-            const response = await fetch(`/api/inspections/${inspectionId}/photos`, {
-                method: "POST",
-                body,
-            });
-
-            if (!response.ok) {
-                const payload = await response.json().catch(() => null);
-                setError(payload?.error || "Failed to upload photos.");
-                return;
-            }
-        } finally {
-            setIsUploading(false);
-            await refreshPhotos();
-            event.target.value = "";
-        }
-    }
+    };
 
     return (
-        <div className="card space-y-4">
-            <div className="flex items-start justify-between gap-2">
-                <div>
-                    <p className="text-sm uppercase tracking-wide text-gray-500">
-                        Inspection Photos
-                    </p>
-                    <h2 className="text-lg font-semibold">
-                        {allowUpload ? "Upload & View" : "View photos"}
-                    </h2>
-                    {allowUpload ? (
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                            JPG/PNG up to 10 MB, max 20 photos. Annotated exports are stored
-                            separately.
-                        </p>
-                    ) : (
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                            Uploaded originals and annotated exports for this inspection.
-                        </p>
-                    )}
-                </div>
-            </div>
+        <div className="space-y-6">
+            <div>
+                <label className="block font-semibold mb-2">Add Photos</label>
 
-            {allowUpload ? (
-                <label className="block">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                        Add photos
-                    </span>
-                    <input
-                        type="file"
-                        multiple
-                        accept="image/png, image/jpeg"
-                        onChange={handleUpload}
-                        disabled={isUploading}
-                        className="mt-2"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                        Stored at inspections/{inspectionId}/original/
-                    </p>
-                </label>
-            ) : null}
+                <input
+                    type="file"
+                    accept={ACCEPTED_TYPES.join(",")}
+                    multiple
+                    onChange={handleFileChange}
+                    className="border p-2 rounded"
+                />
 
-            {error ? <p className="text-danger text-sm">{error}</p> : null}
-
-            <div className="space-y-3">
-                <SectionHeading label="Annotated" badge={annotated.length} />
-                <PhotoGrid photos={annotated} placeholder="Annotated images will appear here." />
-
-                <SectionHeading label="Original" badge={originals.length} />
-                <PhotoGrid photos={originals} placeholder="Upload photos to get started." />
-            </div>
-        </div>
-    );
-}
-
-function SectionHeading({ label, badge }: { label: string; badge: number }) {
-    return (
-        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
-            <span>{label}</span>
-            <span className="inline-flex items-center rounded-full bg-brand px-2 py-0.5 text-[11px] font-medium text-white">
-                {badge}
-            </span>
-        </div>
-    );
-}
-
-function PhotoGrid({ photos, placeholder }: { photos: StoredPhoto[]; placeholder: string }) {
-    if (!photos.length) {
-        return <p className="text-sm text-gray-500">{placeholder}</p>;
-    }
-
-    return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {photos.map((photo) => (
-                <div
-                    key={`${photo.kind}-${photo.name}`}
-                    className="relative overflow-hidden rounded border border-gray-200 dark:border-gray-700"
-                >
-                    <div className="absolute left-2 top-2 rounded bg-white/80 px-2 py-1 text-[11px] font-semibold uppercase text-gray-700 dark:bg-gray-900/80 dark:text-gray-200">
-                        {photo.kind}
+                {previews.length > 0 && (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                        {previews.map((src, i) => (
+                            <Image
+                                key={i}
+                                src={src}
+                                alt="Preview"
+                                width={400}
+                                height={260}
+                                className="h-48 w-full object-cover rounded border"
+                            />
+                        ))}
                     </div>
-                    <Image
-                        src={photo.url}
-                        alt={photo.name}
-                        width={400}
-                        height={260}
-                        className="h-48 w-full object-cover"
-                    />
+                )}
+
+                <button
+                    disabled={loading || files.length === 0}
+                    onClick={handleUpload}
+                    className="bg-blue-600 text-white px-4 py-2 rounded mt-4 disabled:bg-gray-400"
+                >
+                    {loading ? "Uploading..." : "Upload Photos"}
+                </button>
+            </div>
+
+            <hr />
+
+            <div>
+                <h2 className="text-xl font-semibold mb-4">Existing Photos</h2>
+
+                {storedPhotos.length === 0 && (
+                    <p className="text-gray-500">No photos uploaded yet.</p>
+                )}
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {storedPhotos.map((photo) => (
+                        <div key={photo.name} className="space-y-2">
+                            <div className="text-sm text-gray-600">{photo.kind}</div>
+                            <Image
+                                src={photo.url}
+                                alt={photo.name}
+                                width={400}
+                                height={260}
+                                className="h-48 w-full object-cover rounded"
+                            />
+                        </div>
+                    ))}
                 </div>
-            ))}
+            </div>
         </div>
     );
 }

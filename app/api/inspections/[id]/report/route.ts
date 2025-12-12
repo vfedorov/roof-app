@@ -181,11 +181,7 @@ export async function GET(request: NextRequest, context: any) {
 // ------------------------------------------------------------
 function buildHtml(inspection: any, photos: string[]) {
     const generatedAt = new Date().toLocaleString();
-    const vercelUrl = process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : process.env.NEXT_PUBLIC_APP_URL;
-
-    const origin = vercelUrl || "http://localhost:3000";
+    const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     console.log("*****Logo URL:", `${origin}/logo.png`);
 
     return `

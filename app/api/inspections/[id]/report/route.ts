@@ -1,22 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
-import puppeteerCore from "puppeteer-core";
-import chromium from "@sparticuz/chromium-min";
 import { supabaseServer } from "@/lib/supabase-server";
+import puppeteerCore from "puppeteer-core";
 import * as os from "node:os";
 
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
+let cachedExecutablePath: string | null = null;
+let downloadPromise: Promise<string> | null = null;
 
-// ------------------------------------------------------------
-// Get correct browser for local + Vercel production
-// ------------------------------------------------------------
+// Download + cache chromium-path on Vercel only
+async function getVercelChromiumPath(): Promise<string> {
+    if (cachedExecutablePath) return cachedExecutablePath;
 
+    if (!downloadPromise) {
+        const chromium = (await import("@sparticuz/chromium-min")).default;
+
+        const tarUrl = `${process.env.NEXT_PUBLIC_APP_URL}/chromium-pack.tar`;
+
+        downloadPromise = chromium
+            .executablePath(tarUrl)
+            .then((path) => {
+                cachedExecutablePath = path;
+                console.log("Chromium executable path resolved:", path);
+                return path;
+            })
+            .catch((err) => {
+                console.error("Failed to download chromium-min:", err);
+                downloadPromise = null;
+                throw err;
+            });
+    }
+
+    return downloadPromise;
+}
+
+// ---------------------------------------------------------------------------
+// MASTER FUNCTION USED BY PDF GENERATOR
+// ---------------------------------------------------------------------------
 async function getBrowser() {
     const isLocal = process.env.NEXT_PUBLIC_VERCEL_ENVIRONMENT !== "production";
     const platform = os.platform();
     const isWindows = platform === "win32";
 
-    // 1) LOCAL WINDOWS → Use installed Chrome
+    //
+    // 1) LOCAL WINDOWS — Use installed Chrome (your working logic)
+    //
     if (isLocal && isWindows) {
         const localChromePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 
@@ -27,7 +53,9 @@ async function getBrowser() {
         });
     }
 
-    // 2) LOCAL MAC / LINUX → Try local Chrome if available
+    //
+    // 2) LOCAL MAC / LINUX — Use installed Chrome if present
+    //
     if (isLocal && !isWindows) {
         return puppeteerCore.launch({
             headless: true,
@@ -36,21 +64,19 @@ async function getBrowser() {
         });
     }
 
-    // 3) VERCEL → chromium-min
-    /*
-    const chromiumExecutable = await chromium.executablePath(
-        "https://github.com/Sparticuz/chromium/releases/download/v121.0.0/chromium-v121.0.0-pack.tar",
-    );
+    //
+    // 3) VERCEL ENVIRONMENT — chromium-min (FULLY WORKING TEMPLATE)
+    //
+    const chromium = (await import("@sparticuz/chromium-min")).default;
+    const executablePath = await getVercelChromiumPath();
 
-     */
-    const chromiumExecutable = await chromium.executablePath(
-        `${process.env.NEXT_PUBLIC_APP_URL}/chromium-pack.tar`,
-    );
+    console.log("Launching puppeteer-core with chromium-min on Vercel...");
+    console.log("Executable:", executablePath);
 
     return puppeteerCore.launch({
-        args: chromium.args,
-        executablePath: chromiumExecutable,
         headless: true,
+        executablePath,
+        args: chromium.args,
     });
 }
 

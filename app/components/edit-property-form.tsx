@@ -21,7 +21,7 @@ export function EditPropertyForm({
         const formData = new FormData(e.currentTarget);
         const res = id ? await run(id, formData) : await run(formData);
 
-        redirect(`/properties/${res?.data?.id}`);
+        redirect(`/properties/${id ? id : res?.data?.id}`);
     }
 
     return (

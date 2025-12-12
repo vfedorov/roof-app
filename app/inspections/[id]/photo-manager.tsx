@@ -16,7 +16,7 @@ type StoredPhoto = {
 
 export default function PhotoManager({
     inspectionId,
-    allowUpload,
+    allowUpload = false,
 }: {
     inspectionId: string;
     allowUpload: boolean;

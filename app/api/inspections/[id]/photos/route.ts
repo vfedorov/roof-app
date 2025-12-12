@@ -41,10 +41,7 @@ export async function POST(request: NextRequest, context: any) {
 }
 
 export async function GET(request: NextRequest, context: any) {
-    console.log("get patams", context);
     const { id } = await context.params;
-
-    console.log("get photos!!!", id);
 
     const { data, error } = await supabaseServer.storage
         .from("inspection-photos")

@@ -14,20 +14,22 @@ type StoredPhoto = {
     kind: "original" | "annotated";
 };
 
-export default function PhotoManager({ inspectionId }: { inspectionId: string }) {
+export default function PhotoManager({
+    inspectionId,
+    allowUpload,
+}: {
+    inspectionId: string;
+    allowUpload: boolean;
+}) {
     const [files, setFiles] = useState<File[]>([]);
     const [storedPhotos, setStoredPhotos] = useState<StoredPhoto[]>([]);
     const [loading, setLoading] = useState(false);
-
-    console.log("---inspectionId", inspectionId);
 
     // **************************
     // Load existing photos
     // **************************
     async function loadPhotos() {
         if (!inspectionId) return;
-
-        console.log("---load photos: ", inspectionId);
 
         const res = await fetch(`/api/inspections/${inspectionId}/photos`);
         if (!res.ok) return;

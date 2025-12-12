@@ -44,7 +44,7 @@ async function getBrowser() {
 
      */
     const chromiumExecutable = await chromium.executablePath(
-        `${process.env.NEXT_PUBLIC_APP_URL}/chromium-pack.tar.br`,
+        `${process.env.NEXT_PUBLIC_APP_URL}/chromium-pack.tar`,
     );
 
     return puppeteerCore.launch({

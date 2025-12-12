@@ -86,19 +86,22 @@ export default function PhotoManager({
             return;
         }
 
+        const body = new FormData();
+        for (const file of selected) {
+            body.append("files", file);
+        }
+
         setIsUploading(true);
         try {
-            for (const file of selected) {
-                const extension = file.type === "image/png" ? "png" : "jpg";
-                const filename = `${crypto.randomUUID()}.${extension}`;
-                const path = `inspections/${inspectionId}/original/${filename}`;
-                const { error: uploadError } = await supabase.storage
-                    .from(BUCKET)
-                    .upload(path, file);
-                if (uploadError) {
-                    setError(uploadError.message);
-                    break;
-                }
+            const response = await fetch(`/api/inspections/${inspectionId}/photos`, {
+                method: "POST",
+                body,
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => null);
+                setError(payload?.error || "Failed to upload photos.");
+                return;
             }
         } finally {
             setIsUploading(false);

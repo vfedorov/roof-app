@@ -1,49 +1,46 @@
+// scripts/postinstall.mjs
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const projectRoot = dirname(__dirname);
 
 async function main() {
     try {
-        console.log("📦 Starting postinstall script...");
+        console.log("📦 Running postinstall: bundling chromium-min for Vercel...");
 
-        // Resolve chromium package location
-        const chromiumResolvedPath = import.meta.resolve("@sparticuz/chromium");
+        // Use chromium-min instead of chromium
+        const resolved = import.meta.resolve("@sparticuz/chromium-min");
+        const chromiumMinPath = resolved.replace(/^file:\/\//, "");
 
-        // Convert file:// URL to regular path
-        const chromiumPath = chromiumResolvedPath.replace(/^file:\/\//, "");
-
-        // Get the package root directory (goes up from build/esm/index.js to package root)
-        const chromiumDir = dirname(dirname(dirname(chromiumPath)));
+        // chromium-min structure:
+        // node_modules/@sparticuz/chromium-min/bin
+        const chromiumDir = dirname(dirname(dirname(chromiumMinPath)));
         const binDir = join(chromiumDir, "bin");
 
         if (!existsSync(binDir)) {
-            console.log("⚠️  Chromium bin directory not found, skipping archive creation");
+            console.log("⚠️ 'bin/' directory not found inside chromium-min. Skipping.");
             return;
         }
 
-        // Create tar archive in public folder
         const publicDir = join(projectRoot, "public");
         const outputPath = join(publicDir, "chromium-pack.tar");
 
-        console.log("📦 Creating chromium tar archive...");
-        console.log("   Source:", binDir);
-        console.log("   Output:", outputPath);
+        execSync(`mkdir -p "${publicDir}"`);
 
-        // Tar the contents of bin/ directly (without bin prefix)
-        execSync(`mkdir -p ${publicDir} && tar -cf "${outputPath}" -C "${binDir}" .`, {
+        console.log("📦 Creating chromium-pack.tar from chromium-min/bin ...");
+
+        // Create tar
+        execSync(`tar -cf "${outputPath}" -C "${binDir}" .`, {
             stdio: "inherit",
-            cwd: projectRoot,
         });
 
-        console.log("✅ Chromium archive created successfully!");
-    } catch (error) {
-        console.error("❌ Failed to create chromium archive:", error.message);
-        console.log("⚠️  This is not critical for local development");
-        process.exit(0); // Don't fail the install
+        console.log("✅ chromium-pack.tar created successfully in /public/");
+    } catch (err) {
+        console.log("❌ postinstall failed but allowed in dev:", err.message);
     }
 }
 

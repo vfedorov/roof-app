@@ -96,43 +96,52 @@ export default function PhotoManager({
 
     return (
         <div className="space-y-6">
-            <div>
-                <label className="block font-semibold mb-2">Add Photos</label>
+            {/* ----------------------- */}
+            {/* Upload section (only if allowed) */}
+            {/* ----------------------- */}
+            {allowUpload && (
+                <div>
+                    <label className="block font-semibold mb-2">Add Photos</label>
 
-                <input
-                    type="file"
-                    accept={ACCEPTED_TYPES.join(",")}
-                    multiple
-                    onChange={handleFileChange}
-                    className="border p-2 rounded"
-                />
+                    <input
+                        type="file"
+                        accept={ACCEPTED_TYPES.join(",")}
+                        multiple
+                        onChange={handleFileChange}
+                        className="border p-2 rounded"
+                    />
 
-                {previews.length > 0 && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-                        {previews.map((src, i) => (
-                            <Image
-                                key={i}
-                                src={src}
-                                alt="Preview"
-                                width={400}
-                                height={260}
-                                className="h-48 w-full object-cover rounded border"
-                            />
-                        ))}
-                    </div>
-                )}
+                    {previews.length > 0 && (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                            {previews.map((src, i) => (
+                                <Image
+                                    key={i}
+                                    src={src}
+                                    alt="Preview"
+                                    width={400}
+                                    height={260}
+                                    className="h-48 w-full object-cover rounded border"
+                                />
+                            ))}
+                        </div>
+                    )}
 
-                <button
-                    disabled={loading || files.length === 0}
-                    onClick={handleUpload}
-                    className="bg-blue-600 text-white px-4 py-2 rounded mt-4 disabled:bg-gray-400"
-                >
-                    {loading ? "Uploading..." : "Upload Photos"}
-                </button>
-            </div>
+                    <button
+                        disabled={loading || files.length === 0}
+                        onClick={handleUpload}
+                        className="bg-blue-600 text-white px-4 py-2 rounded mt-4 disabled:bg-gray-400"
+                    >
+                        {loading ? "Uploading..." : "Upload Photos"}
+                    </button>
+                </div>
+            )}
 
-            <hr />
+            {/* Divider only if upload section exists */}
+            {allowUpload && <hr />}
 
+            {/* ----------------------- */}
+            {/* Existing photos */}
+            {/* ----------------------- */}
             <div>
                 <h2 className="text-xl font-semibold mb-4">Existing Photos</h2>
 

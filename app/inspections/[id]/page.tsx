@@ -83,7 +83,7 @@ export default async function InspectionDetailPage({ params }: PageProps<"/inspe
                 </div>
 
                 <div className="xl:w-[420px] w-full">
-                    <PhotoManager inspectionId={id} />
+                    <PhotoManager inspectionId={id} allowUpload={false} />
                 </div>
             </div>
         </div>

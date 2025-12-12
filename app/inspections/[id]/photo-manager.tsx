@@ -16,7 +16,13 @@ type StoredPhoto = {
     kind: "original" | "annotated";
 };
 
-export default function PhotoManager({ inspectionId }: { inspectionId: string }) {
+export default function PhotoManager({
+    inspectionId,
+    allowUpload = true,
+}: {
+    inspectionId: string;
+    allowUpload?: boolean;
+}) {
     const [photos, setPhotos] = useState<StoredPhoto[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -108,29 +114,40 @@ export default function PhotoManager({ inspectionId }: { inspectionId: string })
                     <p className="text-sm uppercase tracking-wide text-gray-500">
                         Inspection Photos
                     </p>
-                    <h2 className="text-lg font-semibold">Upload & View</h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                        JPG/PNG up to 10 MB, max 20 photos. Annotated exports are stored separately.
-                    </p>
+                    <h2 className="text-lg font-semibold">
+                        {allowUpload ? "Upload & View" : "View photos"}
+                    </h2>
+                    {allowUpload ? (
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                            JPG/PNG up to 10 MB, max 20 photos. Annotated exports are stored
+                            separately.
+                        </p>
+                    ) : (
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                            Uploaded originals and annotated exports for this inspection.
+                        </p>
+                    )}
                 </div>
             </div>
 
-            <label className="block">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                    Add photos
-                </span>
-                <input
-                    type="file"
-                    multiple
-                    accept="image/png, image/jpeg"
-                    onChange={handleUpload}
-                    disabled={isUploading}
-                    className="mt-2"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                    Stored at inspections/{inspectionId}/original/
-                </p>
-            </label>
+            {allowUpload ? (
+                <label className="block">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                        Add photos
+                    </span>
+                    <input
+                        type="file"
+                        multiple
+                        accept="image/png, image/jpeg"
+                        onChange={handleUpload}
+                        disabled={isUploading}
+                        className="mt-2"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                        Stored at inspections/{inspectionId}/original/
+                    </p>
+                </label>
+            ) : null}
 
             {error ? <p className="text-danger text-sm">{error}</p> : null}
 

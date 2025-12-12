@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/auth";
 
-// The *function* Next.js expects:
+// This function runs for all matched routes
 export async function proxy(request: NextRequest) {
     const url = request.nextUrl;
     const pathname = url.pathname;
@@ -17,12 +17,12 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    // Logged in → prevent visiting login page
+    // Logged in but trying to visit login → redirect
     if (user && isLogin) {
         return NextResponse.redirect(new URL("/dashboard", request.url));
     }
 
-    // Admin-only pages
+    // Admin-only routes
     const adminOnly = ["/users", "/properties/new", "/users/new"];
     if (adminOnly.some((u) => pathname.startsWith(u)) && user.role !== "admin") {
         return NextResponse.redirect(new URL("/dashboard", request.url));
@@ -31,7 +31,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
 }
 
-// The *matcher* must be exported as `config`
+// Only protect application pages — NOT images, NOT public files
 export const config = {
-    matcher: ["/((?!_next|api|favicon\\.ico).*)"],
+    matcher: ["/dashboard/:path*", "/inspections/:path*", "/properties/:path*", "/users/:path*"],
 };

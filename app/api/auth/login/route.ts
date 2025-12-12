@@ -12,10 +12,6 @@ export async function POST(req: Request) {
         .eq("email", email)
         .single();
 
-    console.log("USER FROM DB:", user);
-    console.log("******");
-    console.log(bcrypt.hashSync("admin123", 10));
-
     if (!user || error) {
         return NextResponse.json({ error: "Invalid email or password" }, { status: 400 });
     }

@@ -6,8 +6,6 @@ type ErrorPageProps = {
 };
 
 export default function GlobalError({ error, reset }: ErrorPageProps) {
-    console.error(error);
-
     return (
         <div className="form-control">
             <h1 className="form-title">Something went wrong</h1>

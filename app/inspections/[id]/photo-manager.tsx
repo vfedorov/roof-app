@@ -121,6 +121,7 @@ export default function PhotoManager({
                                     width={400}
                                     height={260}
                                     className="h-48 w-full object-cover rounded border"
+                                    unoptimized
                                 />
                             ))}
                         </div>
@@ -151,15 +152,43 @@ export default function PhotoManager({
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {storedPhotos.map((photo) => (
-                        <div key={photo.name} className="space-y-2">
-                            <div className="text-sm text-gray-600">{photo.kind}</div>
-                            <Image
-                                src={photo.url}
-                                alt={photo.name}
-                                width={400}
-                                height={260}
-                                className="h-48 w-full object-cover rounded"
-                            />
+                        <div
+                            key={`${photo.kind}-${photo.name}`}
+                            className={`space-y-2 group ${allowUpload ? "cursor-pointer" : "cursor-default"}`}
+                            onClick={() => {
+                                if (!allowUpload) return;
+                                window.location.href = `/inspections/${inspectionId}/annotate/${photo.name}`;
+                            }}
+                        >
+                            {/* Label */}
+                            <div className="text-sm text-gray-600 flex items-center gap-1">
+                                {photo.kind === "annotated" ? (
+                                    <span className="text-green-600 font-semibold">
+                                        Annotated ✔
+                                    </span>
+                                ) : (
+                                    <span>Original</span>
+                                )}
+                            </div>
+
+                            {/* Image */}
+                            <div className="relative">
+                                <Image
+                                    src={photo.url}
+                                    alt={photo.name}
+                                    width={400}
+                                    height={260}
+                                    className="h-48 w-full object-cover rounded border group-hover:opacity-90 transition"
+                                    unoptimized
+                                />
+
+                                {/* Hover annotate badge */}
+                                {allowUpload && (
+                                    <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition">
+                                        Annotate
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     ))}
                 </div>

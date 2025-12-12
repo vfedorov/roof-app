@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, context: any) {
         const { error } = await supabaseServer.storage
             .from("inspection-photos")
             .upload(path, file, {
-                cacheControl: "3600",
+                cacheControl: "0",
                 upsert: false,
                 contentType: file.type,
             });
@@ -43,24 +43,41 @@ export async function POST(request: NextRequest, context: any) {
 export async function GET(request: NextRequest, context: any) {
     const { id } = await context.params;
 
-    const { data, error } = await supabaseServer.storage
+    // Get originals
+    const originals = await supabaseServer.storage
         .from("inspection-photos")
-        .list(`inspections/${id}/original`, {
-            limit: 100,
-            sortBy: { column: "created_at", order: "asc" },
+        .list(`inspections/${id}/original`);
+
+    // Get annotated
+    const annotated = await supabaseServer.storage
+        .from("inspection-photos")
+        .list(`inspections/${id}/annotated`);
+
+    const base = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/inspection-photos`;
+
+    const photos: {
+        name: string;
+        kind: "original" | "annotated";
+        url: string;
+    }[] = [];
+
+    // Original photos
+    originals.data?.forEach((f) => {
+        photos.push({
+            name: f.name,
+            kind: "original",
+            url: `${base}/inspections/${id}/original/${f.name}?v=${f.updated_at || Date.now()}`,
         });
+    });
 
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    const urlBase = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/inspection-photos`;
-
-    const photos = data.map((file) => ({
-        name: file.name,
-        kind: "original",
-        url: `${urlBase}/inspections/${id}/original/${file.name}`,
-    }));
+    // Annotated photos
+    annotated.data?.forEach((f) => {
+        photos.push({
+            name: f.name,
+            kind: "annotated",
+            url: `${base}/inspections/${id}/annotated/${f.name}?v=${f.updated_at || Date.now()}`,
+        });
+    });
 
     return NextResponse.json(photos);
 }

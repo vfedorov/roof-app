@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as fabric from "fabric";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/app/components/providers/toast-provider";
 
 export default function AnnotatePage({
     params,
@@ -10,6 +11,7 @@ export default function AnnotatePage({
     params: Promise<{ id: string; photo: string }>;
 }) {
     const router = useRouter();
+    const { toast } = useToast();
 
     const [inspectionId, setInspectionId] = useState("");
     const [photoName, setPhotoName] = useState("");
@@ -194,11 +196,18 @@ export default function AnnotatePage({
         setSaving(false);
 
         if (res.ok) {
-            alert("Annotated image saved!");
+            // alert("Annotated image saved!");
+            toast({
+                title: "Annotated image saved!",
+                variant: "success",
+            });
             router.push(`/inspections/${inspectionId}`);
         } else {
             const err = await res.json();
-            alert("Save failed: " + err.error);
+            toast({
+                title: "Annotation save failed",
+                variant: "destructive",
+            });
         }
     };
 

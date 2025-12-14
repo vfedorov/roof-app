@@ -1,3 +1,4 @@
+// components/dashboard-layout.tsx (polished)
 import { ReactNode } from "react";
 import { getUser } from "@/lib/auth";
 import NavLink from "@/app/components/ui/nav-link";
@@ -7,11 +8,15 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     const user = await getUser();
 
     return (
-        <div className="flex">
+        <div className="layout-container">
             {user && (
                 <aside className="dashboard">
-                    <div className="font-bold mb-6">Roof App</div>
-                    <nav className="space-y-3">
+                    <div className="items-center gap-3 mb-8 sidebar-title">
+                        <img src="/logo.png" alt="logo" className="h-14 w-auto" />
+                        <span className="block mt-4 ml-2.5">Roof App</span>
+                    </div>
+
+                    <nav className="sidebar-nav">
                         {user.role === "admin" && (
                             <>
                                 <NavLink href="/dashboard">Dashboard</NavLink>
@@ -29,13 +34,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                         )}
                     </nav>
 
-                    <nav className="mt-10">
+                    <div className="mt-auto pt-8">
                         <LogoutButton />
-                    </nav>
+                    </div>
                 </aside>
             )}
 
-            <main className="flex-1 p-10">{children}</main>
+            <main className="main-content">{children}</main>
         </div>
     );
 }

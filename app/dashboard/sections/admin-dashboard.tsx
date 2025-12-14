@@ -10,7 +10,7 @@ export default async function AdminDashboard() {
 
     return (
         <div>
-            <h1 className="text-2xl font-bold mb-6">Admin Dashboard</h1>
+            <h1 className="page-title">Admin Dashboard</h1>
 
             <div className="grid grid-cols-3 gap-6">
                 <div className="card">
@@ -25,7 +25,7 @@ export default async function AdminDashboard() {
                     <div className="text-4xl font-bold">{inspections?.length}</div>
                     <div className="text-gray-500">Inspections</div>
                     <Link href="/inspections" className="card-link">
-                        View All
+                        Manage
                     </Link>
                 </div>
 

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import React, { useEffect, useMemo, useState } from "react";
+import { useToast } from "@/app/components/providers/toast-provider";
 
 const BUCKET = "inspection-photos";
 const MAX_FILES = 20;
@@ -21,6 +22,7 @@ export default function PhotoManager({
     inspectionId: string;
     allowUpload: boolean;
 }) {
+    const { toast } = useToast();
     const [files, setFiles] = useState<File[]>([]);
     const [storedPhotos, setStoredPhotos] = useState<StoredPhoto[]>([]);
     const [loading, setLoading] = useState(false);
@@ -57,7 +59,10 @@ export default function PhotoManager({
         );
 
         if (valid.length + storedPhotos.length > MAX_FILES) {
-            alert(`You can only upload up to ${MAX_FILES} total photos.`);
+            toast({
+                title: `You can only upload up to ${MAX_FILES} total photos.`,
+                variant: "destructive",
+            });
             return;
         }
 
@@ -87,10 +92,17 @@ export default function PhotoManager({
         setFiles([]);
 
         if (res.ok) {
-            await loadPhotos(); // <-- refresh UI
+            toast({
+                title: "Image uploaded",
+                variant: "success",
+            });
+            await loadPhotos();
         } else {
             const err = await res.json();
-            alert("Upload failed: " + err.error);
+            toast({
+                title: "Image upload error",
+                variant: "destructive",
+            });
         }
     };
 

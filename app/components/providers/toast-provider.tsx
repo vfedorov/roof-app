@@ -38,11 +38,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                             t.variant === "destructive"
                                 ? "bg-red-600"
                                 : t.variant === "success"
-                                  ? "bg-green-600"
+                                  ? ""
                                   : t.variant === "warning"
                                     ? "bg-yellow-600 text-black"
                                     : "bg-gray-800"
                         }`}
+                        style={t.variant === "success" ? { backgroundColor: "#0F6A3B" } : {}}
                     >
                         <strong>{t.title}</strong>
                         {t.description && <div className="text-sm">{t.description}</div>}

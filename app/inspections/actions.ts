@@ -28,7 +28,7 @@ export async function createInspection(formData: FormData) {
     }
 
     revalidatePath("/inspections");
-    redirect(`/inspections/${data.id}`);
+    redirect(`/inspections/${data.id}/edit`);
 }
 
 export async function updateInspection(id: string, formData: FormData) {

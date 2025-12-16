@@ -9,33 +9,27 @@ export default async function AdminDashboard() {
     ]);
 
     return (
-        <div>
+        <div className="p-2 md:p-0">
             <h1 className="page-title">Admin Dashboard</h1>
 
-            <div className="grid grid-cols-3 gap-6">
-                <div className="card">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Link href="/properties" className="card block hover:no-underline">
                     <div className="text-4xl font-bold">{properties?.length}</div>
                     <div className="text-gray-500">Properties</div>
-                    <Link href="/properties" className="card-link">
-                        Manage
-                    </Link>
-                </div>
+                    <span className="card-link">Manage</span>
+                </Link>
 
-                <div className="card">
+                <Link href="/inspections" className="card block hover:no-underline">
                     <div className="text-4xl font-bold">{inspections?.length}</div>
                     <div className="text-gray-500">Inspections</div>
-                    <Link href="/inspections" className="card-link">
-                        Manage
-                    </Link>
-                </div>
+                    <span className="card-link">Manage</span>
+                </Link>
 
-                <div className="card">
+                <Link href="/users" className="card block hover:no-underline">
                     <div className="text-4xl font-bold">{users?.length}</div>
                     <div className="text-gray-500">Users</div>
-                    <Link href="/users" className="card-link">
-                        Manage
-                    </Link>
-                </div>
+                    <span className="card-link">Manage</span>
+                </Link>
             </div>
         </div>
     );

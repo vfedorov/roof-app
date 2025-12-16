@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { InspectorDashboardProps, Inspection } from "@/types/next";
+import { Inspection, InspectorDashboardProps } from "@/types/next";
 
 export default async function InspectorDashboard(props: InspectorDashboardProps) {
     const { userId } = props;
@@ -18,11 +18,14 @@ export default async function InspectorDashboard(props: InspectorDashboardProps)
     }));
 
     return (
-        <div>
+        <div className="p-2 md:p-0">
             <h1 className="text-2xl font-bold mb-6">Inspector Dashboard</h1>
 
             <div className="mb-6">
-                <Link href="/inspections/new" className="bg-black text-white px-4 py-2 rounded">
+                <Link
+                    href="/inspections/new"
+                    className="block md:inline-block bg-[color:var(--brand)] text-white px-4 py-2 rounded"
+                >
                     + Start Inspection
                 </Link>
             </div>

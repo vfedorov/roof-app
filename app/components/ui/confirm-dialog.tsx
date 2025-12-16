@@ -1,5 +1,3 @@
-"use client";
-
 type ConfirmDialogProps = {
     open: boolean;
     title: string;

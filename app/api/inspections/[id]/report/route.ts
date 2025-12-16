@@ -183,8 +183,7 @@ export async function GET(request: NextRequest, context: any) {
 // ------------------------------------------------------------
 function buildHtml(inspection: any, photos: string[]) {
     const generatedAt = new Date().toLocaleString();
-    const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    console.log("*****Logo URL:", `${origin}/logo.png`);
+    const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 
     return `
 <!DOCTYPE html>
@@ -194,9 +193,9 @@ function buildHtml(inspection: any, photos: string[]) {
 <title>Inspection Report</title>
 <style>
   body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-  .header { padding: 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
+  .header { padding: 0px 20px 16px;; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
   .logo img { width: 180px; height: auto; }
-  .company-info { text-align: right; font-size: 13px; line-height: 1.4; }
+  .company-info { text-align: left; font-size: 13px; line-height: 1.4; }
   .section { padding: 20px; }
   h1 { margin-top: 0; font-size: 24px; }
   h2 { font-size: 18px; margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
@@ -212,13 +211,14 @@ function buildHtml(inspection: any, photos: string[]) {
 <div class="header">
   <div class="logo">
       <img src="${origin}/logo.png" />
-  </div>
-  <div class="company-info">
-      Donahue Roofing & Siding<br/>
-      123 Demo Street<br/>
-      Anytown, ST 12345<br/>
-      (555) 555-1234<br/>
-      www.example.com
+      <div class="company-info">
+          <strong>Donahue Roofing &amp; Siding LLC</strong><br/>
+          1503 13th Street West<br/>
+          Billings, Montana 59102<br/>
+          Phone: (406) 855-0438<br/>
+          Email: mitch@calldonahue.com<br/>
+          www.calldonahue.com
+      </div>
   </div>
 </div>
 

@@ -77,7 +77,7 @@ export default function AnnotatePage({
     // Load base image (locked)
     // ---------------------------------------------------
     useEffect(() => {
-        if (!fabricRef.current || !imageUrl) return;
+        if (!fabricRef.current || !imageUrl || !canvasWrapperRef.current) return;
 
         const loadImage = async () => {
             const canvas = fabricRef.current!;
@@ -87,26 +87,33 @@ export default function AnnotatePage({
                 crossOrigin: "anonymous",
             });
 
-            // LOCK IMAGE
-            img.selectable = false;
-            img.evented = false;
-            img.lockMovementX = true;
-            img.lockMovementY = true;
-            img.lockRotation = true;
-            img.lockScalingX = true;
-            img.lockScalingY = true;
-            img.hoverCursor = "default";
+            const wrapperWidth = canvasWrapperRef.current!.clientWidth;
 
-            // Scale to fit
-            const scale = Math.min(
-                canvas.getWidth()! / img.width!,
-                canvas.getHeight()! / img.height!,
-            );
+            const scale = wrapperWidth / img.width!;
+            const scaledHeight = img.height! * scale;
 
-            img.scale(scale);
+            // Set canvas size to image size
+            canvas.setWidth(wrapperWidth);
+            canvas.setHeight(scaledHeight);
+
+            img.set({
+                selectable: false,
+                evented: false,
+                lockMovementX: true,
+                lockMovementY: true,
+                lockRotation: true,
+                lockScalingX: true,
+                lockScalingY: true,
+                hoverCursor: "default",
+                scaleX: scale,
+                scaleY: scale,
+                left: 0,
+                top: 0,
+            });
 
             canvas.add(img);
             canvas.sendObjectToBack(img);
+            canvas.renderAll();
         };
 
         loadImage();

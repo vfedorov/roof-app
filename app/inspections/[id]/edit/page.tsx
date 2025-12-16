@@ -1,9 +1,11 @@
 import { supabase } from "@/lib/supabase";
 import { EditInspectionForm } from "@/app/components/edit-inspection-form";
 import PhotoManager from "../photo-manager";
+import { getUser } from "@/lib/auth";
 
 export default async function EditInspectionPage({ params }: PageProps<"/inspections/[id]/edit">) {
     const { id } = await params;
+    const user = await getUser();
 
     const { data: inspection } = await supabase
         .from("inspections")
@@ -33,7 +35,10 @@ export default async function EditInspectionPage({ params }: PageProps<"/inspect
                 </div>
 
                 <div className="xl:w-[420px] w-full">
-                    <PhotoManager inspectionId={inspection.id} allowUpload={true} />
+                    <PhotoManager
+                        inspectionId={inspection.id}
+                        allowUpload={user?.role === "inspector"}
+                    />
                 </div>
             </div>
         </div>

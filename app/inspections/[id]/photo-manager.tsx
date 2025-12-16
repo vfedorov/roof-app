@@ -3,6 +3,7 @@
 import Image from "next/image";
 import React, { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/app/components/providers/toast-provider";
+import ConfirmDialog from "@/app/components/ui/confirm-dialog";
 
 const BUCKET = "inspection-photos";
 const MAX_FILES = 20;
@@ -26,29 +27,65 @@ export default function PhotoManager({
     const [files, setFiles] = useState<File[]>([]);
     const [storedPhotos, setStoredPhotos] = useState<StoredPhoto[]>([]);
     const [loading, setLoading] = useState(false);
+    const [confirmPhoto, setConfirmPhoto] = useState<StoredPhoto | null>(null);
 
-    // **************************
-    // Load existing photos
-    // **************************
+    // --------------------------------------------------
+    // Load photos
+    // --------------------------------------------------
     async function loadPhotos() {
         if (!inspectionId) return;
 
         const res = await fetch(`/api/inspections/${inspectionId}/photos`);
         if (!res.ok) return;
+
         const data = await res.json();
         setStoredPhotos(data);
     }
 
     useEffect(() => {
-        async function init() {
-            await loadPhotos(); // this calls setStoredPhotos safely
-        }
-        init();
+        if (!inspectionId) return;
+
+        let cancelled = false;
+
+        (async () => {
+            const res = await fetch(`/api/inspections/${inspectionId}/photos`);
+            if (!res.ok) return;
+
+            const data = await res.json();
+            if (!cancelled) {
+                setStoredPhotos(data);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
     }, [inspectionId]);
 
-    // **************************
-    // Handle file selection
-    // **************************
+    // --------------------------------------------------
+    // Group photos by name (original + annotated)
+    // --------------------------------------------------
+    const groupedPhotos = useMemo(() => {
+        const map = new Map<string, { original?: StoredPhoto; annotated?: StoredPhoto }>();
+
+        for (const photo of storedPhotos) {
+            if (!map.has(photo.name)) {
+                map.set(photo.name, {});
+            }
+
+            if (photo.kind === "original") {
+                map.get(photo.name)!.original = photo;
+            } else {
+                map.get(photo.name)!.annotated = photo;
+            }
+        }
+
+        return Array.from(map.values());
+    }, [storedPhotos]);
+
+    // --------------------------------------------------
+    // File selection
+    // --------------------------------------------------
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files) return;
 
@@ -69,12 +106,11 @@ export default function PhotoManager({
         setFiles(valid);
     };
 
-    // Generate previews
     const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files]);
 
-    // **************************
-    // Upload selected photos
-    // **************************
+    // --------------------------------------------------
+    // Upload
+    // --------------------------------------------------
     const handleUpload = async () => {
         if (!files.length) return;
 
@@ -92,25 +128,42 @@ export default function PhotoManager({
         setFiles([]);
 
         if (res.ok) {
+            toast({ title: "Images uploaded", variant: "success" });
+            await loadPhotos();
+        } else {
+            toast({ title: "Upload failed", variant: "destructive" });
+        }
+    };
+
+    // --------------------------------------------------
+    // Delete / Clear annotation
+    // --------------------------------------------------
+    async function performDelete(photo: StoredPhoto) {
+        const res = await fetch(
+            `/api/inspections/${inspectionId}/photos?name=${photo.name}&kind=${photo.kind}`,
+            { method: "DELETE" },
+        );
+
+        if (res.ok) {
             toast({
-                title: "Image uploaded",
+                title: photo.kind === "original" ? "Photo deleted" : "Annotation removed",
                 variant: "success",
             });
             await loadPhotos();
         } else {
-            const err = await res.json();
             toast({
-                title: "Image upload error",
+                title: "Delete failed",
                 variant: "destructive",
             });
         }
-    };
+    }
 
+    // --------------------------------------------------
+    // Render
+    // --------------------------------------------------
     return (
         <div className="space-y-6">
-            {/* ----------------------- */}
-            {/* Upload section (only if allowed) */}
-            {/* ----------------------- */}
+            {/* Upload section */}
             {allowUpload && (
                 <div>
                     <label className="block font-semibold mb-2">Add Photos</label>
@@ -149,62 +202,102 @@ export default function PhotoManager({
                 </div>
             )}
 
-            {/* Divider only if upload section exists */}
             {allowUpload && <hr />}
 
-            {/* ----------------------- */}
             {/* Existing photos */}
-            {/* ----------------------- */}
             <div>
                 <h2 className="text-xl font-semibold mb-4">Existing Photos</h2>
 
-                {storedPhotos.length === 0 && (
+                {groupedPhotos.length === 0 && (
                     <p className="text-gray-500">No photos uploaded yet.</p>
                 )}
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {storedPhotos.map((photo) => (
-                        <div
-                            key={`${photo.kind}-${photo.name}`}
-                            className={`space-y-2 group ${allowUpload ? "cursor-pointer" : "cursor-default"}`}
-                            onClick={() => {
-                                if (!allowUpload) return;
-                                window.location.href = `/inspections/${inspectionId}/annotate/${photo.name}`;
-                            }}
-                        >
-                            {/* Label */}
-                            <div className="text-sm text-gray-600 flex items-center gap-1">
-                                {photo.kind === "annotated" ? (
-                                    <span className="text-green-600 font-semibold">
-                                        Annotated ✔
-                                    </span>
-                                ) : (
-                                    <span>Original</span>
-                                )}
-                            </div>
-
-                            {/* Image */}
-                            <div className="relative">
-                                <Image
-                                    src={photo.url}
-                                    alt={photo.name}
-                                    width={400}
-                                    height={260}
-                                    className="h-48 w-full object-cover rounded border group-hover:opacity-90 transition"
-                                    unoptimized
-                                />
-
-                                {/* Hover annotate badge */}
-                                {allowUpload && (
-                                    <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition">
-                                        Annotate
+                    {groupedPhotos.map((group) => (
+                        <React.Fragment key={group.original?.name ?? group.annotated?.name}>
+                            {[group.original, group.annotated].filter(Boolean).map((photo) => (
+                                <div
+                                    key={`${photo!.kind}-${photo!.name}`}
+                                    className={`group space-y-2 ${
+                                        allowUpload ? "cursor-pointer" : "cursor-default"
+                                    }`}
+                                    onClick={() => {
+                                        if (!allowUpload) return;
+                                        window.location.href = `/inspections/${inspectionId}/annotate/${photo!.name}`;
+                                    }}
+                                >
+                                    <div className="text-sm text-gray-600">
+                                        {photo!.kind === "annotated" ? (
+                                            <span className="text-green-600 font-semibold">
+                                                Annotated ✔
+                                            </span>
+                                        ) : (
+                                            "Original"
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                        </div>
+
+                                    <div className="relative">
+                                        <Image
+                                            src={photo!.url}
+                                            alt={photo!.name}
+                                            width={400}
+                                            height={260}
+                                            className="h-48 w-full object-cover rounded border group-hover:opacity-90 transition"
+                                            unoptimized
+                                        />
+
+                                        {/* Mobile actions */}
+                                        {allowUpload && (
+                                            <div className="flex gap-2 mt-2">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        window.location.href = `/inspections/${inspectionId}/annotate/${photo!.name}`;
+                                                    }}
+                                                    className="flex-1 text-sm border rounded py-1 text-center"
+                                                >
+                                                    ✏️ Edit
+                                                </button>
+
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setConfirmPhoto(photo!);
+                                                    }}
+                                                    className="flex-1 text-sm border border-red-500 text-red-600 rounded py-1"
+                                                >
+                                                    {photo!.kind === "original"
+                                                        ? "🗑 Delete"
+                                                        : "🗑 Clear"}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </React.Fragment>
                     ))}
                 </div>
             </div>
+            <ConfirmDialog
+                open={!!confirmPhoto}
+                title={confirmPhoto?.kind === "original" ? "Delete photo?" : "Remove annotation?"}
+                description={
+                    confirmPhoto?.kind === "original"
+                        ? "This will permanently delete the original photo and its annotation. This action cannot be undone."
+                        : "This will remove the annotation but keep the original photo."
+                }
+                confirmLabel={
+                    confirmPhoto?.kind === "original" ? "Delete Photo" : "Remove Annotation"
+                }
+                destructive
+                onCancel={() => setConfirmPhoto(null)}
+                onConfirm={async () => {
+                    if (!confirmPhoto) return;
+                    await performDelete(confirmPhoto);
+                    setConfirmPhoto(null);
+                }}
+            />
         </div>
     );
 }

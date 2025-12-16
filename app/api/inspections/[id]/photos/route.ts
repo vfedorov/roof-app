@@ -76,3 +76,37 @@ export async function GET(request: NextRequest, context: any) {
 
     return NextResponse.json(photos);
 }
+
+export async function DELETE(request: NextRequest, context: any) {
+    const { id } = await context.params;
+    const { searchParams } = new URL(request.url);
+
+    const name = searchParams.get("name");
+    const kind = searchParams.get("kind") as "original" | "annotated" | null;
+
+    if (!id || !name || !kind) {
+        return NextResponse.json({ error: "Missing id, name, or kind" }, { status: 400 });
+    }
+
+    const paths: string[] = [];
+
+    if (kind === "original") {
+        // Delete original
+        paths.push(`inspections/${id}/original/${name}`);
+        // Delete annotated if exists
+        paths.push(`inspections/${id}/annotated/${name}`);
+    }
+
+    if (kind === "annotated") {
+        // Delete annotation only
+        paths.push(`inspections/${id}/annotated/${name}`);
+    }
+
+    const { error } = await supabaseAdmin.storage.from(BUCKET).remove(paths);
+
+    if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
+}

@@ -1,5 +1,7 @@
 "use client";
 
+import PhotoManager from "@/app/components/photo-manager";
+
 type Section = {
     id: string;
     condition: string | null;
@@ -10,15 +12,21 @@ type Section = {
     };
 };
 
-export function InspectionSections({ sections }: { sections: Section[] }) {
+export function InspectionSections({
+    inspectionId,
+    sections,
+    allowUpload,
+}: {
+    inspectionId: string;
+    sections: Section[];
+    allowUpload: boolean;
+}) {
     return (
-        <div className="space-y-6">
-            <h2 className="text-xl font-semibold">Inspection Sections</h2>
-
+        <div className="space-y-8">
             {sections.map((section) => (
                 <div key={section.id} className="card space-y-4">
                     <h3 className="text-lg font-semibold">
-                        {section.inspection_section_types?.label}
+                        {section.inspection_section_types.label}
                     </h3>
 
                     {/* Condition */}
@@ -26,8 +34,8 @@ export function InspectionSections({ sections }: { sections: Section[] }) {
                         <label className="block text-sm font-medium mb-1">Condition</label>
                         <select
                             name={`section:${section.id}:condition`}
-                            className="select"
                             defaultValue={section.condition ?? ""}
+                            className="select"
                         >
                             <option value="">Select</option>
                             <option value="Good">Good</option>
@@ -41,9 +49,8 @@ export function InspectionSections({ sections }: { sections: Section[] }) {
                         <label className="block text-sm font-medium mb-1">Observations</label>
                         <textarea
                             name={`section:${section.id}:observations`}
-                            className="textarea"
                             defaultValue={section.observations ?? ""}
-                            placeholder="Describe observed conditions…"
+                            className="textarea"
                         />
                     </div>
 
@@ -52,11 +59,17 @@ export function InspectionSections({ sections }: { sections: Section[] }) {
                         <label className="block text-sm font-medium mb-1">Recommendations</label>
                         <textarea
                             name={`section:${section.id}:recommendations`}
-                            className="textarea"
                             defaultValue={section.recommendations ?? ""}
-                            placeholder="Recommended actions…"
+                            className="textarea"
                         />
                     </div>
+
+                    {/* Section-based photos */}
+                    <PhotoManager
+                        inspectionId={inspectionId}
+                        sectionId={section.id}
+                        allowUpload={allowUpload}
+                    />
                 </div>
             ))}
         </div>

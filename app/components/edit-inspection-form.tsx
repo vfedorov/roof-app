@@ -78,7 +78,11 @@ export function EditInspectionForm({
                 </div>
 
                 {/* NEW: Sections are inside the same form */}
-                <InspectionSections sections={sections} />
+                <InspectionSections
+                    sections={sections}
+                    inspectionId={inspection.id}
+                    allowUpload={true}
+                />
 
                 <button className="btn">{isPending ? "Saving..." : "Update"}</button>
             </form>

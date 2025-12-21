@@ -18,9 +18,11 @@ type StoredPhoto = {
 
 export default function PhotoManager({
     inspectionId,
+    sectionId,
     allowUpload = false,
 }: {
     inspectionId: string;
+    sectionId: string;
     allowUpload: boolean;
 }) {
     const { toast } = useToast();
@@ -35,7 +37,7 @@ export default function PhotoManager({
     async function loadPhotos() {
         if (!inspectionId) return;
 
-        const res = await fetch(`/api/inspections/${inspectionId}/photos`);
+        const res = await fetch(`/api/inspections/${inspectionId}/photos?section_id=${sectionId}`);
         if (!res.ok) return;
 
         const data = await res.json();
@@ -43,13 +45,16 @@ export default function PhotoManager({
     }
 
     useEffect(() => {
-        if (!inspectionId) return;
+        if (!inspectionId || !sectionId) return;
 
         let cancelled = false;
 
         (async () => {
-            const res = await fetch(`/api/inspections/${inspectionId}/photos`);
-            if (!res.ok) return;
+            const res = await fetch(
+                `/api/inspections/${inspectionId}/photos?section_id=${sectionId}`,
+            );
+
+            if (!res.ok || cancelled) return;
 
             const data = await res.json();
             if (!cancelled) {
@@ -60,7 +65,7 @@ export default function PhotoManager({
         return () => {
             cancelled = true;
         };
-    }, [inspectionId]);
+    }, [inspectionId, sectionId]);
 
     // --------------------------------------------------
     // Group photos by name (original + annotated)
@@ -95,7 +100,8 @@ export default function PhotoManager({
             (file) => ACCEPTED_TYPES.includes(file.type) && file.size <= MAX_FILE_SIZE,
         );
 
-        if (valid.length + storedPhotos.length > MAX_FILES) {
+        const originalCount = storedPhotos.filter((p) => p.kind === "original").length;
+        if (valid.length + originalCount > MAX_FILES) {
             toast({
                 title: `You can only upload up to ${MAX_FILES} total photos.`,
                 variant: "destructive",
@@ -115,6 +121,7 @@ export default function PhotoManager({
         if (!files.length) return;
 
         const formData = new FormData();
+        formData.append("section_id", sectionId);
         files.forEach((f) => formData.append("files", f));
 
         setLoading(true);
@@ -140,7 +147,7 @@ export default function PhotoManager({
     // --------------------------------------------------
     async function performDelete(photo: StoredPhoto) {
         const res = await fetch(
-            `/api/inspections/${inspectionId}/photos?name=${photo.name}&kind=${photo.kind}`,
+            `/api/inspections/${inspectionId}/photos?photo_id=${photo.name}&kind=${photo.kind}&section_id=${sectionId}`,
             { method: "DELETE" },
         );
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { deleteInspection } from "../actions";
-import PhotoManager from "./photo-manager";
+import PhotoManager from "../../components/photo-manager";
 
 export default async function InspectionDetailPage({ params }: PageProps<"/inspections/[id]">) {
     const { id } = await params;

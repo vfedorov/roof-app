@@ -19,10 +19,36 @@ export default async function EditInspectionPage({ params }: PageProps<"/inspect
         .select("id, name")
         .eq("role", "inspector");
 
+    const { data: sections } = await supabase
+        .from("inspection_sections")
+        .select(
+            `
+            id,
+            condition,
+            observations,
+            recommendations,
+            inspection_section_types (
+                id,
+                label,
+                sort_order
+            )
+        `,
+        )
+        .eq("inspection_id", id)
+        .order("created_at");
+
+    const normalizedSections =
+        (sections ?? []).map((s: any) => ({
+            ...s,
+            inspection_section_types: Array.isArray(s.inspection_section_types)
+                ? s.inspection_section_types[0]
+                : s.inspection_section_types,
+        })) ?? [];
+
     return (
         <div className="page gap-6">
             <div className="flex flex-col gap-6 xl:flex-row">
-                <div className="flex-1">
+                <div className="flex-1 space-y-6">
                     <div className="card">
                         <h1 className="text-2xl font-semibold mb-4">Edit Inspection</h1>
                         <EditInspectionForm
@@ -30,10 +56,12 @@ export default async function EditInspectionPage({ params }: PageProps<"/inspect
                             inspection={inspection}
                             inspectors={inspectors}
                             properties={properties}
+                            sections={normalizedSections}
                         />
                     </div>
                 </div>
 
+                {/* Photo manager — untouched */}
                 <div className="xl:w-[420px] w-full">
                     <PhotoManager
                         inspectionId={inspection.id}

@@ -32,9 +32,17 @@ export default function AnnotatePage({
             setInspectionId(p.id);
             setPhotoName(p.photo);
 
-            const base = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-            const url = `${base}/storage/v1/object/public/inspection-photos/inspections/${p.id}/original/${p.photo}`;
-            setImageUrl(url);
+            const res = await fetch(`/api/inspections/${p.id}/photos?photo_id=${p.photo}`);
+
+            if (!res.ok) return;
+
+            const data = await res.json();
+
+            // original image_url
+            const original = data.find((x: any) => x.kind === "original");
+            if (original) {
+                setImageUrl(original.url);
+            }
         }
         load();
     }, [params]);

@@ -58,6 +58,40 @@ export async function GET(request: NextRequest, context: any) {
     const { id } = await context.params;
     const { searchParams } = new URL(request.url);
     const section_id = searchParams.get("section_id");
+    const photo_id = searchParams.get("photo_id");
+
+    if (photo_id) {
+        const { data, error } = await supabaseServer
+            .from("inspection_images")
+            .select("id, image_url, annotated_image_url")
+            .eq("id", photo_id)
+            .eq("inspection_id", id)
+            .single();
+
+        if (error || !data) {
+            return NextResponse.json({ error: "Photo not found" }, { status: 404 });
+        }
+
+        const result = [];
+
+        if (data.image_url) {
+            result.push({
+                name: data.id,
+                kind: "original",
+                url: data.image_url,
+            });
+        }
+
+        if (data.annotated_image_url) {
+            result.push({
+                name: data.id,
+                kind: "annotated",
+                url: data.annotated_image_url,
+            });
+        }
+
+        return NextResponse.json(result);
+    }
 
     if (!id || !section_id) {
         return NextResponse.json({ error: "Missing inspection id or section_id" }, { status: 400 });

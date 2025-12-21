@@ -1,16 +1,7 @@
 "use client";
 
 import PhotoManager from "@/app/components/photo-manager";
-
-type Section = {
-    id: string;
-    condition: string | null;
-    observations: string | null;
-    recommendations: string | null;
-    inspection_section_types: {
-        label: string;
-    };
-};
+import { RenderSection } from "@/lib/inspections/mapSectionsForRender";
 
 export function InspectionSections({
     inspectionId,
@@ -18,16 +9,14 @@ export function InspectionSections({
     allowUpload,
 }: {
     inspectionId: string;
-    sections: Section[];
+    sections: RenderSection[];
     allowUpload: boolean;
 }) {
     return (
         <div className="space-y-8">
             {sections.map((section) => (
                 <div key={section.id} className="card space-y-4">
-                    <h3 className="text-lg font-semibold">
-                        {section.inspection_section_types.label}
-                    </h3>
+                    <h3 className="text-lg font-semibold">{section.label}</h3>
 
                     {/* Condition */}
                     <div>

@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { EditInspectionForm } from "@/app/components/edit-inspection-form";
+import { getInspectionSections } from "@/lib/inspections/getInspectionSections";
+import { mapSectionsForRender } from "@/lib/inspections/mapSectionsForRender";
 
 export default async function EditInspectionPage({ params }: PageProps<"/inspections/[id]/edit">) {
     const { id } = await params;
@@ -16,31 +18,8 @@ export default async function EditInspectionPage({ params }: PageProps<"/inspect
         .select("id, name")
         .eq("role", "inspector");
 
-    const { data: sections } = await supabase
-        .from("inspection_sections")
-        .select(
-            `
-            id,
-            condition,
-            observations,
-            recommendations,
-            inspection_section_types (
-                id,
-                label,
-                sort_order
-            )
-        `,
-        )
-        .eq("inspection_id", id)
-        .order("created_at");
-
-    const normalizedSections =
-        (sections ?? []).map((s: any) => ({
-            ...s,
-            inspection_section_types: Array.isArray(s.inspection_section_types)
-                ? s.inspection_section_types[0]
-                : s.inspection_section_types,
-        })) ?? [];
+    const rawSections = await getInspectionSections(id);
+    const sections = mapSectionsForRender(rawSections);
 
     return (
         <div className="page gap-6">
@@ -53,7 +32,7 @@ export default async function EditInspectionPage({ params }: PageProps<"/inspect
                             inspection={inspection}
                             inspectors={inspectors}
                             properties={properties}
-                            sections={normalizedSections}
+                            sections={sections}
                         />
                     </div>
                 </div>

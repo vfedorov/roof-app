@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { deleteInspection } from "../actions";
-import PhotoManager from "@/app/components/photo-manager";
+import { getInspectionSections } from "@/lib/inspections/getInspectionSections";
+import { mapSectionsForRender } from "@/lib/inspections/mapSectionsForRender";
+import { SectionRenderer } from "@/app/components/inspection/SectionRenderer";
 
 export default async function InspectionDetailPage({ params }: PageProps<"/inspections/[id]">) {
     const { id } = await params;
-
     const { data: inspection } = await supabase
         .from("inspections")
         .select("*, properties(name, address), users(name)")
@@ -14,30 +15,8 @@ export default async function InspectionDetailPage({ params }: PageProps<"/inspe
 
     if (!inspection) return <div>Inspection not found</div>;
 
-    const { data: sections } = await supabase
-        .from("inspection_sections")
-        .select(
-            `
-        id,
-        condition,
-        observations,
-        recommendations,
-        inspection_section_types (
-            label,
-            sort_order
-        )
-    `,
-        )
-        .eq("inspection_id", id)
-        .order("created_at");
-
-    const normalizedSections =
-        (sections ?? []).map((s: any) => ({
-            ...s,
-            inspection_section_types: Array.isArray(s.inspection_section_types)
-                ? s.inspection_section_types[0]
-                : s.inspection_section_types,
-        })) ?? [];
+    const rawSections = await getInspectionSections(id);
+    const sections = mapSectionsForRender(rawSections);
 
     return (
         <div className="page gap-6">
@@ -111,45 +90,7 @@ export default async function InspectionDetailPage({ params }: PageProps<"/inspe
                             photos.
                         </p>
                     </div>
-                    {normalizedSections?.map((section) => (
-                        <div key={section.id} className="card space-y-4">
-                            <div className="border-b pb-2">
-                                <h2 className="text-lg font-semibold">
-                                    {section.inspection_section_types.label}
-                                </h2>
-                                {section.condition && (
-                                    <p className="text-sm text-gray-600">
-                                        Condition:{" "}
-                                        <span className="font-medium">{section.condition}</span>
-                                    </p>
-                                )}
-                            </div>
-
-                            {section.observations && (
-                                <div>
-                                    <p className="text-sm font-medium text-gray-500">
-                                        Observations
-                                    </p>
-                                    <p className="text-gray-700">{section.observations}</p>
-                                </div>
-                            )}
-
-                            {section.recommendations && (
-                                <div>
-                                    <p className="text-sm font-medium text-gray-500">
-                                        Recommendations
-                                    </p>
-                                    <p className="text-gray-700">{section.recommendations}</p>
-                                </div>
-                            )}
-
-                            <PhotoManager
-                                inspectionId={id}
-                                sectionId={section.id}
-                                allowUpload={false}
-                            />
-                        </div>
-                    ))}
+                    <SectionRenderer inspectionId={id} sections={sections} />
                 </div>
             </div>
         </div>

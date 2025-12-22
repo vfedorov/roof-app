@@ -1,4 +1,3 @@
-// components/dashboard-layout.tsx (polished)
 import { ReactNode } from "react";
 import { getUser } from "@/lib/auth/auth";
 import NavLink from "@/app/components/ui/nav-link";

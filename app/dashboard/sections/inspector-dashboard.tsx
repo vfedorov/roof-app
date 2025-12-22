@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase/supabase";
 import Link from "next/link";
-import { Inspection, InspectorDashboardProps } from "@/types/next";
+import { Inspection, InspectorDashboardProps } from "@/lib/inspections/types";
 
 export default async function InspectorDashboard(props: InspectorDashboardProps) {
     const { userId } = props;
@@ -14,7 +14,7 @@ export default async function InspectorDashboard(props: InspectorDashboardProps)
 
     const typedInspections: Inspection[] = (inspections ?? []).map((i) => ({
         ...i,
-        properties: i.properties?.[0],
+        properties: i.properties?.[0] || i.properties || null,
     }));
 
     return (

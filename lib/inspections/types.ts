@@ -1,7 +1,3 @@
-export interface PageParams<T extends string = string> {
-    params: Record<T, string>;
-}
-
 export interface InspectorDashboardProps {
     userId: string;
 }
@@ -18,10 +14,15 @@ export interface Property {
 
 export interface Inspection {
     id: string;
-    date: string;
-    roof_type?: string;
-    summary_notes?: string;
 
-    // relations
+    date: string | null;
+    roof_type?: string | null;
+    summary_notes?: string | null;
+
+    property_id?: string;
+    inspector_id?: string | null;
+
+    status?: "draft" | "completed" | "report_generated";
+
     properties?: Property;
 }

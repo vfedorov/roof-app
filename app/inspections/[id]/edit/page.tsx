@@ -3,9 +3,15 @@ import { EditInspectionForm } from "@/app/components/edit-inspection-form";
 import { getInspectionSections } from "@/lib/inspections/getInspectionSections";
 import { mapSectionsForRender } from "@/lib/inspections/mapSectionsForRender";
 import { USER_ROLES } from "@/lib/auth/roles";
+import { getUser } from "@/lib/auth/auth";
 
 export default async function EditInspectionPage({ params }: PageProps<"/inspections/[id]/edit">) {
     const { id } = await params;
+    const user = await getUser();
+
+    if (!id || !user) {
+        return <>Missing parameters</>;
+    }
 
     const { data: inspection } = await supabase
         .from("inspections")
@@ -34,6 +40,7 @@ export default async function EditInspectionPage({ params }: PageProps<"/inspect
                             inspectors={inspectors}
                             properties={properties}
                             sections={sections}
+                            allowEditPhotos={user.role === USER_ROLES.INSPECTOR}
                         />
                     </div>
                 </div>

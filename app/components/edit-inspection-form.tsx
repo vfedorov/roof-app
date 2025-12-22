@@ -4,6 +4,8 @@ import { FormEvent } from "react";
 import { useServerAction } from "@/app/components/hooks/use-server-action";
 import { updateInspection } from "@/app/inspections/actions";
 import { InspectionSections } from "@/app/components/inspection-sections";
+import { Inspection, Property } from "@/lib/inspections/types";
+import { RenderSection } from "@/lib/inspections/mapSectionsForRender";
 
 export function EditInspectionForm({
     id,
@@ -11,12 +13,14 @@ export function EditInspectionForm({
     inspectors,
     properties,
     sections,
+    allowEditPhotos,
 }: {
     id: string;
-    inspection: any;
-    inspectors?: any[] | null;
-    properties: any[] | null;
-    sections: any[]; // NEW
+    inspection: Inspection;
+    inspectors?: { id: string; name: string }[] | null;
+    properties: Property[] | null;
+    sections: RenderSection[];
+    allowEditPhotos: boolean;
 }) {
     const { run, isPending } = useServerAction(updateInspection, {
         successMessage: "Inspection updated successfully",
@@ -33,7 +37,6 @@ export function EditInspectionForm({
             <h1 className="form-title">Edit Inspection</h1>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Inspection fields */}
                 <div className="space-y-4">
                     <select
                         name="property_id"
@@ -49,7 +52,7 @@ export function EditInspectionForm({
 
                     <select
                         name="inspector_id"
-                        defaultValue={inspection.inspector_id}
+                        defaultValue={inspection.inspector_id ?? ""}
                         className="border p-2 w-full"
                     >
                         {inspectors?.map((u) => (
@@ -62,17 +65,17 @@ export function EditInspectionForm({
                     <input
                         type="date"
                         name="date"
-                        defaultValue={inspection.date}
+                        defaultValue={inspection.date ?? ""}
                         className="border p-2 w-full"
                     />
                     <input
                         name="roof_type"
-                        defaultValue={inspection.roof_type}
+                        defaultValue={inspection.roof_type ?? ""}
                         className="border p-2 w-full"
                     />
                     <textarea
                         name="summary_notes"
-                        defaultValue={inspection.summary_notes}
+                        defaultValue={inspection.summary_notes ?? ""}
                         className="border p-2 w-full"
                     />
                 </div>
@@ -81,7 +84,7 @@ export function EditInspectionForm({
                 <InspectionSections
                     sections={sections}
                     inspectionId={inspection.id}
-                    allowUpload={true}
+                    allowUpload={allowEditPhotos}
                 />
 
                 <button className="btn">{isPending ? "Saving..." : "Update"}</button>

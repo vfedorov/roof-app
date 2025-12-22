@@ -1,9 +1,8 @@
 import { supabase } from "@/lib/supabase/supabase";
 import Link from "next/link";
-import { Inspection, InspectorDashboardProps } from "@/lib/inspections/types";
+import { Inspection } from "@/lib/inspections/types";
 
-export default async function InspectorDashboard(props: InspectorDashboardProps) {
-    const { userId } = props;
+export default async function InspectorDashboard({ userId }: { userId: string }) {
     const [{ data: properties }, { data: inspections }] = await Promise.all([
         supabase.from("properties").select("id, name"),
         supabase

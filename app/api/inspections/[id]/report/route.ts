@@ -2,9 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase-server";
 import puppeteerCore from "puppeteer-core";
 import * as os from "node:os";
+import { getInspectionSections } from "@/lib/inspections/getInspectionSections";
+import { mapSectionsForRender } from "@/lib/inspections/mapSectionsForRender";
+
+const MAX_PHOTOS_PER_SECTION = 6;
 
 let cachedExecutablePath: string | null = null;
 let downloadPromise: Promise<string> | null = null;
+
+type PdfSection = {
+    label: string;
+    condition?: string | null;
+    observations?: string | null;
+    recommendations?: string | null;
+    photos: string[];
+};
 
 // URL recommended by Sparticuz (works on Vercel)
 const CHROMIUM_TAR_URL =
@@ -101,50 +113,45 @@ export async function GET(request: NextRequest, context: any) {
         return NextResponse.json({ error: "Inspection not found" }, { status: 404 });
     }
 
-    const BUCKET = "inspection-photos";
-    const base = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${BUCKET}`;
+    const rawSections = await getInspectionSections(id);
+    const sections = mapSectionsForRender(rawSections);
 
-    const folderAnnotated = `inspections/${id}/annotated`;
-    const folderOriginal = `inspections/${id}/original`;
+    const sectionsForPdf: PdfSection[] = [];
 
-    // Load photos
-    const [ann, orig] = await Promise.all([
-        supabaseServer.storage.from(BUCKET).list(folderAnnotated),
-        supabaseServer.storage.from(BUCKET).list(folderOriginal),
-    ]);
+    for (const section of sections) {
+        const { data: images } = await supabaseServer
+            .from("inspection_images")
+            .select("image_url, annotated_image_url")
+            .eq("inspection_id", id)
+            .eq("section_id", section.id)
+            .order("created_at", { ascending: true });
 
-    const photos: string[] = [];
-    const maxPhotos = 6;
+        const photos: string[] = [];
 
-    // Build maps for quick lookup
-    const annMap = new Map<string, string>();
-    ann.data?.forEach((f) => {
-        const baseName = f.name.split(".")[0];
-        annMap.set(baseName, `${base}/${folderAnnotated}/${f.name}?v=${Date.now()}`);
-    });
+        if (images) {
+            for (const img of images) {
+                if (photos.length >= MAX_PHOTOS_PER_SECTION) break;
 
-    // Pair original + annotated
-    if (orig.data) {
-        for (const original of orig.data) {
-            if (photos.length >= maxPhotos) break;
-
-            const baseName = original.name.split(".")[0];
-
-            const originalUrl = `${base}/${folderOriginal}/${original.name}?v=${Date.now()}`;
-            const annotatedUrl = annMap.get(baseName);
-
-            // add original first
-            photos.push(originalUrl);
-
-            // add annotation if exists
-            if (annotatedUrl && photos.length < maxPhotos) {
-                photos.push(annotatedUrl);
+                if (img.image_url) {
+                    photos.push(img.image_url);
+                }
+                if (img.annotated_image_url) {
+                    photos.push(img.annotated_image_url);
+                }
             }
         }
+
+        sectionsForPdf.push({
+            label: section.label,
+            condition: section.condition,
+            observations: section.observations,
+            recommendations: section.recommendations,
+            photos,
+        });
     }
 
     // Build HTML
-    const html = buildHtml(inspection, photos);
+    const html = buildHtml(inspection, sectionsForPdf);
 
     // Generate PDF
     const browser = await getBrowser();
@@ -181,7 +188,7 @@ export async function GET(request: NextRequest, context: any) {
 // ------------------------------------------------------------
 // HTML Template
 // ------------------------------------------------------------
-function buildHtml(inspection: any, photos: string[]) {
+function buildHtml(inspection: any, sections: PdfSection[]) {
     const generatedAt = new Date().toLocaleString();
     const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 
@@ -237,11 +244,33 @@ function buildHtml(inspection: any, photos: string[]) {
 </div>
 
 <div class="section">
-  <h2>Photos</h2>
-  <div class="photo-grid">
-      ${photos.map((p) => `<img src="${p}" />`).join("")}
-  </div>
+  <h2>Inspection Sections</h2>
+
+  ${sections
+      .map(
+          (section) => `
+    <div style="margin-bottom: 24px;">
+      <h3 style="font-size: 16px; margin-bottom: 4px;">
+        ${section.label}
+      </h3>
+
+      ${section.condition ? `<p><strong>Condition:</strong> ${section.condition}</p>` : ""}
+      ${section.observations ? `<p><strong>Observations:</strong> ${section.observations}</p>` : ""}
+      ${section.recommendations ? `<p><strong>Recommendations:</strong> ${section.recommendations}</p>` : ""}
+
+      ${
+          section.photos.length
+              ? `<div class="photo-grid">
+                ${section.photos.map((p) => `<img src="${p}" />`).join("")}
+               </div>`
+              : `<p style="font-size: 12px; color: #666;">${"No photos for this section."}</p>`
+      }
+    </div>
+  `,
+      )
+      .join("")}
 </div>
+
 
 <div class="footer">
   Generated on ${generatedAt}

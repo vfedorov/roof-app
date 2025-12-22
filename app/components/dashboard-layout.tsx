@@ -1,10 +1,11 @@
 // components/dashboard-layout.tsx (polished)
 import { ReactNode } from "react";
-import { getUser } from "@/lib/auth";
+import { getUser } from "@/lib/auth/auth";
 import NavLink from "@/app/components/ui/nav-link";
 import LogoutButton from "@/app/components/ui/logout-button";
 
 import MobileHeader from "@/app/components/mobile-header";
+import { USER_ROLES } from "@/lib/auth/roles";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
     const user = await getUser();
@@ -21,7 +22,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                         </div>
 
                         <nav className="sidebar-nav">
-                            {user.role === "admin" && (
+                            {user.role === USER_ROLES.ADMIN && (
                                 <>
                                     <NavLink href="/dashboard">Dashboard</NavLink>
                                     <NavLink href="/properties">Properties</NavLink>
@@ -29,7 +30,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                                     <NavLink href="/users">Users</NavLink>
                                 </>
                             )}
-                            {user.role === "inspector" && (
+                            {user.role === USER_ROLES.INSPECTOR && (
                                 <>
                                     <NavLink href="/dashboard">Dashboard</NavLink>
                                     <NavLink href="/properties">Properties</NavLink>

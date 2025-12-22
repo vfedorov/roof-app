@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/supabase";
 
 export default async function UsersPage() {
     const { data: users } = await supabase.from("users").select("*").order("created_at");

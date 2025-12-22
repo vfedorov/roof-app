@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
-import { getUser } from "@/lib/auth";
+import { supabase } from "@/lib/supabase/supabase";
+import { getUser } from "@/lib/auth/auth";
+import { USER_ROLES } from "@/lib/auth/roles";
 
 export default async function InspectionsPage() {
     const user = await getUser();
 
     let query = supabase.from("inspections").select("*, properties(name), users(name)");
 
-    if (user.role === "inspector") {
+    if (user.role === USER_ROLES.INSPECTOR) {
         query = query.eq("inspector_id", user.id);
     }
 

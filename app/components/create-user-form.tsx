@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useServerAction } from "@/app/components/hooks/use-server-action";
 import { createUser } from "@/app/users/actions";
+import { USER_ROLES } from "@/lib/auth/roles";
 
 export function CreateUserForm() {
     const { run, isPending } = useServerAction(createUser, {
@@ -64,8 +65,8 @@ export function CreateUserForm() {
             />
 
             <select name="role" className="border p-2 w-full" required>
-                <option value="inspector">Inspector</option>
-                <option value="admin">Admin</option>
+                <option value={USER_ROLES.INSPECTOR}>Inspector</option>
+                <option value={USER_ROLES.ADMIN}>Admin</option>
             </select>
 
             <button

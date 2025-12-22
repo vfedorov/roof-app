@@ -4,6 +4,7 @@ import { useState } from "react";
 import NavLink from "@/app/components/ui/nav-link";
 import LogoutButton from "@/app/components/ui/logout-button";
 import { usePathname } from "next/navigation";
+import { USER_ROLES } from "@/lib/auth/roles";
 
 export default function MobileHeader({ role }: { role: string }) {
     const [open, setOpen] = useState(false);
@@ -41,9 +42,9 @@ export default function MobileHeader({ role }: { role: string }) {
                     <NavLink href="/dashboard">Dashboard</NavLink>
                     <NavLink href="/properties">Properties</NavLink>
                     <NavLink href="/inspections">
-                        {role === "admin" ? "Inspections" : "My Inspections"}
+                        {role === USER_ROLES.ADMIN ? "Inspections" : "My Inspections"}
                     </NavLink>
-                    {role === "admin" && <NavLink href="/users">Users</NavLink>}
+                    {role === USER_ROLES.ADMIN && <NavLink href="/users">Users</NavLink>}
                     <LogoutButton />
                 </nav>
             </div>

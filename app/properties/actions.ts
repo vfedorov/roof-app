@@ -1,12 +1,13 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/supabase";
 import { revalidatePath } from "next/cache";
-import { getUser } from "@/lib/auth";
+import { getUser } from "@/lib/auth/auth";
+import { USER_ROLES } from "@/lib/auth/roles";
 
 export async function createProperty(formData: FormData) {
     const user = await getUser();
-    if (!user || user.role !== "admin") {
+    if (!user || user.role !== USER_ROLES.ADMIN) {
         throw new Error("Not allowed");
     }
 
@@ -41,7 +42,7 @@ export async function createProperty(formData: FormData) {
 
 export async function updateProperty(id: string, formData: FormData) {
     const user = await getUser();
-    if (!user || user.role !== "admin") {
+    if (!user || user.role !== USER_ROLES.ADMIN) {
         throw new Error("Not allowed");
     }
 
@@ -68,7 +69,7 @@ export async function updateProperty(id: string, formData: FormData) {
 
 export async function deleteProperty(id: string) {
     const user = await getUser();
-    if (!user || user.role !== "admin") {
+    if (!user || user.role !== USER_ROLES.ADMIN) {
         throw new Error("Not allowed");
     }
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
-import { getUser } from "@/lib/auth";
+import { supabase } from "@/lib/supabase/supabase";
+import { getUser } from "@/lib/auth/auth";
+import { USER_ROLES } from "@/lib/auth/roles";
 
 export default async function PropertiesPage() {
     const user = await getUser();
@@ -13,7 +14,7 @@ export default async function PropertiesPage() {
         <div className="page">
             <div className="header">
                 <h1>Properties</h1>
-                {user.role === "admin" && (
+                {user.role === USER_ROLES.ADMIN && (
                     <Link className="btn" href="/properties/new">
                         Add Property
                     </Link>

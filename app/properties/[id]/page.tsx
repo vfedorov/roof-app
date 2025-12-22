@@ -1,8 +1,9 @@
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/supabase";
 import Link from "next/link";
 import { deleteProperty } from "@/app/properties/actions";
-import { getUser } from "@/lib/auth";
+import { getUser } from "@/lib/auth/auth";
 import { DeleteButton } from "@/app/components/delete-button";
+import { USER_ROLES } from "@/lib/auth/roles";
 
 export default async function PropertyDetailPage({ params }: PageProps<"/properties/[id]">) {
     const user = await getUser();
@@ -34,7 +35,7 @@ export default async function PropertyDetailPage({ params }: PageProps<"/propert
                 </div>
             </div>
 
-            {user.role === "admin" && (
+            {user.role === USER_ROLES.ADMIN && (
                 <div className="flex gap-4">
                     <Link href={`/properties/${id}/edit`} className="btn">
                         Edit

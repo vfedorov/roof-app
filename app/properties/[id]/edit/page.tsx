@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/supabase";
 import { EditPropertyForm } from "@/app/components/edit-property-form";
 
 export default async function EditPropertyPage({ params }: PageProps<"/properties/[id]/edit">) {

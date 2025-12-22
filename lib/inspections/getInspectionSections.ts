@@ -1,4 +1,4 @@
-import { supabaseServer } from "@/lib/supabase-server";
+import { supabaseServer } from "@/lib/supabase/supabase-server";
 
 export async function getInspectionSections(inspectionId: string) {
     const { data, error } = await supabaseServer

@@ -1,6 +1,7 @@
-import { supabase } from "@/lib/supabase";
-import { getUser } from "@/lib/auth";
+import { supabase } from "@/lib/supabase/supabase";
+import { getUser } from "@/lib/auth/auth";
 import { createInspection } from "../actions";
+import { USER_ROLES } from "@/lib/auth/roles";
 
 export default async function NewInspectionPage() {
     const user = await getUser();
@@ -8,8 +9,11 @@ export default async function NewInspectionPage() {
     const { data: properties } = await supabase.from("properties").select("id, name").order("name");
 
     let inspectors: { id: string; name: string }[] = [];
-    if (user.role === "admin") {
-        const res = await supabase.from("users").select("id, name").eq("role", "inspector");
+    if (user.role === USER_ROLES.ADMIN) {
+        const res = await supabase
+            .from("users")
+            .select("id, name")
+            .eq("role", USER_ROLES.INSPECTOR);
         inspectors = res.data ?? [];
     }
 
@@ -30,7 +34,7 @@ export default async function NewInspectionPage() {
                     </select>
                 </div>
 
-                {user.role === "admin" ? (
+                {user.role === USER_ROLES.ADMIN ? (
                     <div>
                         <label className="block mb-1 font-medium">Inspector</label>
                         <select name="inspector_id" className="select" required>

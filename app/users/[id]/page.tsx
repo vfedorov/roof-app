@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/supabase";
 import Link from "next/link";
 import { deleteUser } from "../actions";
 

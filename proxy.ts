@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { getUser } from "@/lib/auth";
+import { getUser } from "@/lib/auth/auth";
+import { USER_ROLES } from "@/lib/auth/roles";
 
 // This function runs for all matched routes
 export async function proxy(request: NextRequest) {
@@ -24,7 +25,7 @@ export async function proxy(request: NextRequest) {
 
     // Admin-only routes
     const adminOnly = ["/users", "/properties/new", "/users/new"];
-    if (adminOnly.some((u) => pathname.startsWith(u)) && user.role !== "admin") {
+    if (adminOnly.some((u) => pathname.startsWith(u)) && user.role !== USER_ROLES.ADMIN) {
         return NextResponse.redirect(new URL("/dashboard", request.url));
     }
 

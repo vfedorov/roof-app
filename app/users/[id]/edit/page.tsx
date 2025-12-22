@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/supabase";
 import { EditUserForm } from "@/app/components/edit-user-form";
 
 export default async function EditUserPage({ params }: PageProps<"/users/[id]/edit">) {

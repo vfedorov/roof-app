@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/supabase";
 import { deleteInspection } from "../actions";
 import { getInspectionSections } from "@/lib/inspections/getInspectionSections";
 import { mapSectionsForRender } from "@/lib/inspections/mapSectionsForRender";

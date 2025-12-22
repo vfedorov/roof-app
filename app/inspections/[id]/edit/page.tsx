@@ -1,7 +1,8 @@
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/supabase";
 import { EditInspectionForm } from "@/app/components/edit-inspection-form";
 import { getInspectionSections } from "@/lib/inspections/getInspectionSections";
 import { mapSectionsForRender } from "@/lib/inspections/mapSectionsForRender";
+import { USER_ROLES } from "@/lib/auth/roles";
 
 export default async function EditInspectionPage({ params }: PageProps<"/inspections/[id]/edit">) {
     const { id } = await params;
@@ -16,7 +17,7 @@ export default async function EditInspectionPage({ params }: PageProps<"/inspect
     const { data: inspectors } = await supabase
         .from("users")
         .select("id, name")
-        .eq("role", "inspector");
+        .eq("role", USER_ROLES.INSPECTOR);
 
     const rawSections = await getInspectionSections(id);
     const sections = mapSectionsForRender(rawSections);

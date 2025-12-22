@@ -33,7 +33,7 @@ export function EditInspectionForm({
     }
 
     return (
-        <div className="form-control">
+        <div className="form-control px-0 md:px-6 md:card">
             <h1 className="form-title">Edit Inspection</h1>
 
             <form onSubmit={handleSubmit} className="space-y-6">

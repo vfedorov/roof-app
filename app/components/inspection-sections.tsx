@@ -15,7 +15,7 @@ export function InspectionSections({
     return (
         <div className="space-y-8">
             {sections.map((section) => (
-                <div key={section.id} className="card space-y-4">
+                <div key={section.id} className="space-y-4 md:card">
                     <h3 className="text-lg font-semibold">{section.label}</h3>
 
                     {/* Condition */}

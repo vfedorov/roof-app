@@ -141,13 +141,15 @@ export async function GET(request: NextRequest, context: any) {
             }
         }
 
-        sectionsForPdf.push({
-            label: section.label,
-            condition: section.condition,
-            observations: section.observations,
-            recommendations: section.recommendations,
-            photos,
-        });
+        if (section.condition || section.observations || section.recommendations || photos.length) {
+            sectionsForPdf.push({
+                label: section.label,
+                condition: section.condition,
+                observations: section.observations,
+                recommendations: section.recommendations,
+                photos,
+            });
+        }
     }
 
     // Build HTML

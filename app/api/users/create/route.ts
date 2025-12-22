@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { supabase } from "@/lib/supabase";
-import { getUser } from "@/lib/auth";
+import { supabase } from "@/lib/supabase/supabase";
+import { getUser } from "@/lib/auth/auth";
+import { USER_ROLES } from "@/lib/auth/roles";
 
 export async function POST(req: Request) {
     const currentUser = await getUser();
 
-    if (!currentUser || currentUser.role !== "admin") {
+    if (!currentUser || currentUser.role !== USER_ROLES.ADMIN) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

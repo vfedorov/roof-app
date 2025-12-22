@@ -1,6 +1,6 @@
-import { supabaseServer } from "@/lib/supabase-server";
+import { supabaseServer } from "@/lib/supabase/supabase-server";
 import { type NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
 
 const BUCKET = "inspection-photos";
 const PATH_PREFIX = "/storage/v1/object/public";

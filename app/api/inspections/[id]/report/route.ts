@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase-server";
+import { supabaseServer } from "@/lib/supabase/supabase-server";
 import puppeteerCore from "puppeteer-core";
 import * as os from "node:os";
 import { getInspectionSections } from "@/lib/inspections/getInspectionSections";

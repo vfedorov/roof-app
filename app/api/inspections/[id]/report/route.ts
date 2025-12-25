@@ -4,6 +4,7 @@ import puppeteerCore from "puppeteer-core";
 import * as os from "node:os";
 import { getInspectionSections } from "@/lib/inspections/getInspectionSections";
 import { mapSectionsForRender } from "@/lib/inspections/mapSectionsForRender";
+import { getUser } from "@/lib/auth/auth";
 
 const MAX_PHOTOS_PER_SECTION = 6;
 
@@ -21,6 +22,31 @@ type PdfSection = {
 // URL recommended by Sparticuz (works on Vercel)
 const CHROMIUM_TAR_URL =
     "https://github.com/Sparticuz/chromium/releases/download/v121.0.0/chromium-v121.0.0-pack.tar";
+
+function computeOverallCondition(sections: Array<{ condition: string | null }>): string {
+    const conditions = sections
+        .map((s) => s.condition)
+        .filter((c): c is string => c !== null && c.trim() !== "");
+
+    if (conditions.length < 6) return "";
+
+    if (conditions.some((c) => c === "Poor")) return "Poor";
+    if (conditions.some((c) => c === "Fair")) return "Fair";
+    return "Good";
+}
+
+async function getReportGeneratedStatusId() {
+    const { data: status, error } = await supabaseServer
+        .from("status_types")
+        .select("id")
+        .eq("status_name", "Report Generated")
+        .single();
+
+    if (error || !status) {
+        throw new Error("Status 'Report Generated' not found in status_types table");
+    }
+    return status.id;
+}
 
 // ---------------------------------------------------------------------------
 // DOWNLOAD + CACHE chromium-min ON VERCEL
@@ -105,7 +131,7 @@ export async function GET(request: NextRequest, context: any) {
     // Load inspection
     const { data: inspection } = await supabaseServer
         .from("inspections")
-        .select("*, properties(name, address), users(name)")
+        .select("*, properties(name, address), users(name), inspection_status(locked)")
         .eq("id", id)
         .single();
 
@@ -115,8 +141,28 @@ export async function GET(request: NextRequest, context: any) {
 
     const rawSections = await getInspectionSections(id);
     const sections = mapSectionsForRender(rawSections);
+    const overallCondition = computeOverallCondition(rawSections);
 
     const sectionsForPdf: PdfSection[] = [];
+
+    try {
+        const reportStatusId = await getReportGeneratedStatusId();
+        const user = await getUser();
+
+        if (!inspection?.inspection_status?.locked && inspection?.status_id) {
+            await supabaseServer
+                .from("inspection_status")
+                .update({
+                    status_type_id: reportStatusId,
+                    locked: true,
+                    locked_at: new Date().toISOString(),
+                    locked_by: user?.id,
+                })
+                .eq("id", inspection.status_id);
+        }
+    } catch (error) {
+        console.error("Failed to update inspection status to 'Report Generated':", error);
+    }
 
     for (const section of sections) {
         const { data: images } = await supabaseServer
@@ -153,7 +199,7 @@ export async function GET(request: NextRequest, context: any) {
     }
 
     // Build HTML
-    const html = buildHtml(inspection, sectionsForPdf);
+    const html = buildHtml(inspection, sectionsForPdf, overallCondition);
 
     // Generate PDF
     const browser = await getBrowser();
@@ -190,7 +236,7 @@ export async function GET(request: NextRequest, context: any) {
 // ------------------------------------------------------------
 // HTML Template
 // ------------------------------------------------------------
-function buildHtml(inspection: any, sections: PdfSection[]) {
+function buildHtml(inspection: any, sections: PdfSection[], overallCondition: string) {
     const generatedAt = new Date().toLocaleString();
     const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 
@@ -238,6 +284,7 @@ function buildHtml(inspection: any, sections: PdfSection[]) {
   <p><strong>Inspector:</strong> ${inspection.users?.name ?? "Unassigned"}</p>
   <p><strong>Date:</strong> ${inspection.date ?? ""}</p>
   <p><strong>Roof Type:</strong> ${inspection.roof_type ?? ""}</p>
+  ${overallCondition ? `<p><strong>Overall Condition:</strong> ${overallCondition} </p>` : ""}
 </div>
 
 <div class="section">

@@ -8,6 +8,11 @@ export default async function NewInspectionPage() {
 
     const { data: properties } = await supabase.from("properties").select("id, name").order("name");
 
+    const { data: statusTypes } = await supabase
+        .from("status_types")
+        .select("id, status_name")
+        .order("status_name");
+
     let inspectors: { id: string; name: string }[] = [];
     if (user.role === USER_ROLES.ADMIN) {
         const res = await supabase
@@ -54,6 +59,19 @@ export default async function NewInspectionPage() {
                 <div>
                     <label className="block mb-1 font-medium">Inspection Date</label>
                     <input type="date" name="date" className="input" required />
+                </div>
+
+                {/* STATUS */}
+                <div>
+                    <label className="block mb-1 font-medium">Status</label>
+                    <select name="status_type_id" className="select" required>
+                        <option value="">Select Status</option>
+                        {statusTypes?.map((st) => (
+                            <option key={st.id} value={st.id}>
+                                {st.status_name}
+                            </option>
+                        ))}
+                    </select>
                 </div>
 
                 {/* ROOF TYPE */}

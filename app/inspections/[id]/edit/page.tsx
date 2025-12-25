@@ -15,9 +15,31 @@ export default async function EditInspectionPage({ params }: PageProps<"/inspect
 
     const { data: inspection } = await supabase
         .from("inspections")
-        .select("*")
+        .select("*, inspection_status(id, locked, status_type_id, status_types(id, status_name))")
         .eq("id", id)
         .single();
+
+    if (!inspection) {
+        return <div>Inspection not found</div>;
+    }
+
+    if (inspection.inspection_status?.locked && user.role !== USER_ROLES.ADMIN) {
+        return (
+            <div className="page">
+                <div className="card">
+                    <h1 className="text-2xl font-semibold mb-4">Edit Inspection</h1>
+                    <p className="text-gray-600">
+                        This inspection is locked. Only admins can edit completed inspections.
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    const { data: statusTypes = [] } = await supabase
+        .from("status_types")
+        .select("id, status_name")
+        .order("status_name");
 
     const { data: properties } = await supabase.from("properties").select("id, name");
     const { data: inspectors } = await supabase
@@ -40,6 +62,8 @@ export default async function EditInspectionPage({ params }: PageProps<"/inspect
                             inspectors={inspectors}
                             properties={properties}
                             sections={sections}
+                            statusTypes={statusTypes}
+                            currentStatusTypeId={inspection.inspection_status?.status_type_id}
                             allowEditPhotos={user.role === USER_ROLES.INSPECTOR}
                         />
                     </div>

@@ -1,24 +1,14 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/supabase";
 import { deleteInspection } from "../actions";
-import { getInspectionSections } from "@/lib/inspections/getInspectionSections";
+import {
+    computeOverallCondition,
+    getInspectionSections,
+} from "@/lib/inspections/getInspectionSections";
 import { mapSectionsForRender } from "@/lib/inspections/mapSectionsForRender";
 import { SectionRenderer } from "@/app/components/inspection/SectionRenderer";
 import { getUser } from "@/lib/auth/auth";
 import { USER_ROLES } from "@/lib/auth/roles";
-
-function computeOverallCondition(sections: Array<{ condition: string | null }>): string {
-    const conditions = sections
-        .map((s) => s.condition)
-        .filter((c): c is string => c !== null && c.trim() !== "");
-
-    if (conditions.length === 0) return "Not Set";
-    else if (conditions.length < 6) return "Partial Set";
-
-    if (conditions.some((c) => c === "Poor")) return "Poor";
-    if (conditions.some((c) => c === "Fair")) return "Fair";
-    return "Good";
-}
 
 export default async function InspectionDetailPage({ params }: PageProps<"/inspections/[id]">) {
     const { id } = await params;
@@ -48,9 +38,6 @@ export default async function InspectionDetailPage({ params }: PageProps<"/inspe
                                     Inspection
                                 </p>
                                 <div className="mt-2">
-                                    {/*<span className="text-sm font-medium text-gray-700 dark:text-gray-300">*/}
-                                    {/*    Overall Condition:*/}
-                                    {/*</span>*/}
                                     <span
                                         className={`ml-2 px-2 py-0.5 text-xs font-medium rounded-full ${
                                             overallCondition === "Poor"

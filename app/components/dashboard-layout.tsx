@@ -1,8 +1,8 @@
 import { ReactNode } from "react";
 import { getUser } from "@/lib/auth/auth";
+import DesktopHeader from "@/app/components/desktop-header";
 import NavLink from "@/app/components/ui/nav-link";
 import LogoutButton from "@/app/components/ui/logout-button";
-
 import MobileHeader from "@/app/components/mobile-header";
 import { USER_ROLES } from "@/lib/auth/roles";
 
@@ -47,6 +47,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
             <main className="main-content">
                 {user && <MobileHeader role={user.role} />}
+                {<DesktopHeader />}
                 {children}
             </main>
         </div>

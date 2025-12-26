@@ -39,7 +39,7 @@ export default async function EditInspectionPage({ params }: PageProps<"/inspect
     const { data: statusTypes = [] } = await supabase
         .from("status_types")
         .select("id, status_name")
-        .order("status_name");
+        .order("sort_order");
 
     const { data: properties } = await supabase.from("properties").select("id, name");
     const { data: inspectors } = await supabase

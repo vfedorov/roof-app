@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/supabase-server";
 import puppeteerCore from "puppeteer-core";
 import * as os from "node:os";
-import { getInspectionSections } from "@/lib/inspections/getInspectionSections";
+import {
+    computeOverallCondition,
+    getInspectionSections,
+} from "@/lib/inspections/getInspectionSections";
 import { mapSectionsForRender } from "@/lib/inspections/mapSectionsForRender";
 import { getUser } from "@/lib/auth/auth";
 
@@ -22,18 +25,6 @@ type PdfSection = {
 // URL recommended by Sparticuz (works on Vercel)
 const CHROMIUM_TAR_URL =
     "https://github.com/Sparticuz/chromium/releases/download/v121.0.0/chromium-v121.0.0-pack.tar";
-
-function computeOverallCondition(sections: Array<{ condition: string | null }>): string {
-    const conditions = sections
-        .map((s) => s.condition)
-        .filter((c): c is string => c !== null && c.trim() !== "");
-
-    if (conditions.length < 6) return "";
-
-    if (conditions.some((c) => c === "Poor")) return "Poor";
-    if (conditions.some((c) => c === "Fair")) return "Fair";
-    return "Good";
-}
 
 async function getReportGeneratedStatusId() {
     const { data: status, error } = await supabaseServer
@@ -131,7 +122,9 @@ export async function GET(request: NextRequest, context: any) {
     // Load inspection
     const { data: inspection } = await supabaseServer
         .from("inspections")
-        .select("*, properties(name, address), users(name), inspection_status(locked)")
+        .select(
+            "*, properties(name, address), users(name), inspection_status(locked, status_types(status_name))",
+        )
         .eq("id", id)
         .single();
 
@@ -285,6 +278,8 @@ function buildHtml(inspection: any, sections: PdfSection[], overallCondition: st
   <p><strong>Date:</strong> ${inspection.date ?? ""}</p>
   <p><strong>Roof Type:</strong> ${inspection.roof_type ?? ""}</p>
   ${overallCondition ? `<p><strong>Overall Condition:</strong> ${overallCondition} </p>` : ""}
+  <p><strong>Status:</strong>${inspection?.inspection_status?.status_types?.status_name ?? ""}</p>
+  
 </div>
 
 <div class="section">

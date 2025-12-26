@@ -11,7 +11,7 @@ export default async function NewInspectionPage() {
     const { data: statusTypes } = await supabase
         .from("status_types")
         .select("id, status_name")
-        .order("status_name");
+        .eq("status_name", "Draft");
 
     let inspectors: { id: string; name: string }[] = [];
     if (user.role === USER_ROLES.ADMIN) {

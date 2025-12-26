@@ -13,3 +13,18 @@ export async function getInspectionSections(inspectionId: string) {
 
     return data ?? [];
 }
+
+export function computeOverallCondition(sections: Array<{ condition: string | null }>): string {
+    const conditions = sections
+        .map((s) => s.condition)
+        .filter((c): c is string => c !== null && c.trim() !== "");
+
+    let result = "";
+    if (conditions.length < 6) result += "*";
+
+    if (conditions.some((c) => c === "Poor")) result += "Poor";
+    else if (conditions.some((c) => c === "Fair")) result += "Fair";
+    else if (conditions.some((c) => c === "Good")) result += "Good";
+
+    return result;
+}

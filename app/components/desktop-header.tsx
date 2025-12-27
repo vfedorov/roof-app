@@ -22,7 +22,6 @@ export default function DesktopHeader() {
             const prevSegment = pathSegments[i - 1];
             currentPath += `/${segment}`;
 
-            // Пропускаем ID (числа или UUID) в пути
             if (
                 /^\d+$/.test(segment) ||
                 /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segment)
@@ -30,7 +29,6 @@ export default function DesktopHeader() {
                 segment = "element";
             }
 
-            // Определяем читаемое название для сегмента
             let label = segment;
             switch (segment) {
                 case "properties":
@@ -52,11 +50,14 @@ export default function DesktopHeader() {
                     label = prevSegment.charAt(0).toUpperCase() + prevSegment.slice(1, -1);
                     break;
             }
-
-            if (i === pathSegments.length - 1) {
-                breadcrumbs.push({ label, href: null });
+            if (label != "login") {
+                if (i === pathSegments.length - 1) {
+                    breadcrumbs.push({ label, href: null });
+                } else {
+                    breadcrumbs.push({ label, href: currentPath });
+                }
             } else {
-                breadcrumbs.push({ label, href: currentPath });
+                breadcrumbs.length = 0;
             }
         }
 

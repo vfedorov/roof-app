@@ -140,9 +140,13 @@ export async function GET(request: NextRequest, context: any) {
 
     try {
         const reportStatusId = await getReportGeneratedStatusId();
+
         const user = await getUser();
 
-        if (!inspection?.inspection_status?.locked && inspection?.status_id) {
+        if (
+            inspection?.inspection_status?.status_types?.status_name === "Completed" &&
+            inspection?.status_id
+        ) {
             await supabaseServer
                 .from("inspection_status")
                 .update({
@@ -170,12 +174,14 @@ export async function GET(request: NextRequest, context: any) {
         if (images) {
             for (const img of images) {
                 if (photos.length >= MAX_PHOTOS_PER_SECTION) break;
-
-                if (img.image_url) {
-                    photos.push(img.image_url);
-                }
                 if (img.annotated_image_url) {
                     photos.push(img.annotated_image_url);
+                }
+            }
+            for (const img of images) {
+                if (photos.length >= MAX_PHOTOS_PER_SECTION) break;
+                if (img.image_url) {
+                    photos.push(img.image_url);
                 }
             }
         }

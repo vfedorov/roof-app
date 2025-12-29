@@ -117,11 +117,19 @@ export function EditInspectionForm({
                         className="border p-2 w-full"
                     >
                         <option value="">Select Status</option>
-                        {statusTypes?.map((st) => (
-                            <option key={st.id} value={st.id}>
-                                {st.status_name}
-                            </option>
-                        ))}
+                        {statusTypes?.map((st) => {
+                            if (
+                                st.status_name === "Report Generated" &&
+                                st.id !== currentStatusTypeId
+                            ) {
+                                return null;
+                            }
+                            return (
+                                <option key={st.id} value={st.id}>
+                                    {st.status_name}
+                                </option>
+                            );
+                        })}
                     </select>
                     <input
                         name="roof_type"

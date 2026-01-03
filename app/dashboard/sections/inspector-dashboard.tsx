@@ -3,15 +3,21 @@ import { computeOverallCondition } from "@/lib/inspections/getInspectionSections
 import Link from "next/link";
 
 export default async function InspectorDashboard({ userId }: { userId: string }) {
-    const [{ data: properties }, { data: inspections }] = await Promise.all([
-        supabase.from("properties").select("id, name"),
-        supabase
-            .from("inspections")
-            .select(
-                "id, date, properties:property_id (id, name), inspection_status!inner (status_types (status_name))",
-            )
-            .eq("inspector_id", userId),
-    ]);
+    const [{ data: properties }, { data: inspections }, { data: measurements }] = await Promise.all(
+        [
+            supabase.from("properties").select("id, name"),
+            supabase
+                .from("inspections")
+                .select(
+                    "id, date, properties:property_id (id, name), inspection_status!inner (status_types (status_name))",
+                )
+                .eq("inspector_id", userId),
+            supabase
+                .from("measurement_sessions")
+                .select("*, properties:property_id (id, name)")
+                .eq("created_by", userId),
+        ],
+    );
 
     let sectionsByInspection: Record<string, Array<{ condition: string | null }>> = {};
 
@@ -43,13 +49,19 @@ export default async function InspectorDashboard({ userId }: { userId: string })
         <div className="p-2 md:p-0">
             <h1 className="text-2xl font-bold mb-6">Inspector Dashboard</h1>
 
-            <div className="mb-6">
+            <div className="mb-6 flex flex-col md:flex-row gap-2">
                 <Link
                     href="/inspections/new"
                     className="block md:inline-block bg-[color:var(--brand)] text-white px-4 py-2 rounded"
                 >
                     + Start Inspection
                 </Link>
+                <Link
+                    href="/measurements/new"
+                    className="block md:inline-block bg-[color:var(--brand)] text-white px-4 py-2 rounded"
+                >
+                    + Start Measurement
+                </Link>{" "}
             </div>
 
             <h2 className="text-xl font-semibold mb-3">My Inspections</h2>
@@ -73,7 +85,7 @@ export default async function InspectorDashboard({ userId }: { userId: string })
             </div>
 
             <h2 className="text-xl font-semibold mb-3">Properties</h2>
-            <div className="space-y-3">
+            <div className="space-y-3 mb-10">
                 {properties?.map((p) => (
                     <Link
                         key={p.id}
@@ -81,6 +93,20 @@ export default async function InspectorDashboard({ userId }: { userId: string })
                         className="block border p-4 rounded"
                     >
                         {p.name}
+                    </Link>
+                ))}
+            </div>
+
+            <h2 className="text-xl font-semibold mb-3">Measurements</h2>
+            <div className="space-y-3">
+                {measurements?.map((p) => (
+                    <Link
+                        key={p.id}
+                        href={`/measurements/${p.id}`}
+                        className="block border p-4 rounded"
+                    >
+                        {p.properties?.name ?? "Nothing here"} {" - "}
+                        {new Date(p.date).toLocaleDateString()}
                     </Link>
                 ))}
             </div>

@@ -6,7 +6,7 @@ import LogoutButton from "@/app/components/ui/logout-button";
 import { usePathname } from "next/navigation";
 import { USER_ROLES } from "@/lib/auth/roles";
 
-const ROOT_PATHS = ["/dashboard", "/properties", "/inspections", "/users"];
+const ROOT_PATHS = ["/dashboard", "/properties", "/measurements", "/inspections", "/users"];
 
 export default function MobileHeader({ role }: { role: string }) {
     const [open, setOpen] = useState(false);
@@ -15,7 +15,7 @@ export default function MobileHeader({ role }: { role: string }) {
     let isEditing = false;
     let viewPath = "";
 
-    const editRegex = /^(\/properties|\/inspections|\/users)\/([^\/]+)\/edit$/;
+    const editRegex = /^(\/properties|\/measurements|\/inspections|\/users)\/([^\/]+)\/edit$/;
     const editMatch = pathname.match(editRegex);
 
     if (editMatch) {
@@ -90,6 +90,7 @@ export default function MobileHeader({ role }: { role: string }) {
                     <NavLink href="/inspections">
                         {role === USER_ROLES.ADMIN ? "Inspections" : "My Inspections"}
                     </NavLink>
+                    <NavLink href="/measurements">Measurements</NavLink>
                     {role === USER_ROLES.ADMIN && <NavLink href="/users">Users</NavLink>}
                     <LogoutButton />
                 </nav>

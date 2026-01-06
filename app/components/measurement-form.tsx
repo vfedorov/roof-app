@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/supabase";
+import MeasurementImageManager from "@/app/components/measurement-image-manager";
 
 interface Property {
     id: string;
@@ -182,6 +183,10 @@ export default function MeasurementForm({
                     placeholder="Write measurement notes..."
                     defaultValue={measurement?.notes ?? ""}
                 />
+            </div>
+            {/* Measurement Images */}
+            <div className="mt-6">
+                <MeasurementImageManager measurementId={measurement!.id} allowUpload={true} />
             </div>
 
             {/* SUBMIT */}

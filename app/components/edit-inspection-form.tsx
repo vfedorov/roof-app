@@ -5,8 +5,9 @@ import { useServerAction } from "@/app/components/hooks/use-server-action";
 import { useToast } from "@/app/components/hooks/use-toast";
 import { updateInspection } from "@/app/inspections/actions";
 import { InspectionSections } from "@/app/components/inspection-sections";
-import { Inspection, Property } from "@/lib/inspections/types";
+import { Inspection, Measurement, Property } from "@/lib/inspections/types";
 import { RenderSection } from "@/lib/inspections/mapSectionsForRender";
+import Link from "next/link";
 
 interface StatusType {
     id: string;
@@ -22,6 +23,7 @@ export function EditInspectionForm({
     statusTypes,
     currentStatusTypeId,
     allowEditPhotos,
+    measurements,
 }: {
     id: string;
     inspection: Inspection;
@@ -31,6 +33,7 @@ export function EditInspectionForm({
     statusTypes: StatusType[] | null;
     currentStatusTypeId: string | null;
     allowEditPhotos: boolean;
+    measurements: Measurement[] | null;
 }) {
     const { run, isPending } = useServerAction(updateInspection, {
         successMessage: "Inspection updated successfully",
@@ -149,7 +152,22 @@ export function EditInspectionForm({
                     inspectionId={inspection.id}
                     allowUpload={allowEditPhotos}
                 />
-
+                {measurements && measurements.length > 0 && (
+                    <>
+                        <h2 className="text-xl font-semibold mb-3">Measurements</h2>
+                        <div className="space-y-3">
+                            {measurements.map((p) => (
+                                <Link
+                                    key={p.id}
+                                    href={`/measurements/${p.id}`}
+                                    className="block border p-4 rounded"
+                                >
+                                    {new Date(p.date).toLocaleDateString()}
+                                </Link>
+                            ))}
+                        </div>
+                    </>
+                )}
                 <button className="btn">{isPending ? "Saving..." : "Update"}</button>
             </form>
         </div>

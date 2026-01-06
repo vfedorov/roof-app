@@ -10,6 +10,10 @@ export default async function PropertyDetailPage({ params }: PageProps<"/propert
     const { id } = await params;
 
     const { data: property } = await supabase.from("properties").select("*").eq("id", id).single();
+    const { data: measurements } = await supabase
+        .from("measurement_sessions")
+        .select("*, users(name)")
+        .eq("property_id", id);
 
     if (!property) return <div>Property not found</div>;
 
@@ -33,6 +37,24 @@ export default async function PropertyDetailPage({ params }: PageProps<"/propert
                 <div>
                     <strong>Notes:</strong> {property.notes}
                 </div>
+                {measurements && measurements.length > 0 && (
+                    <>
+                        <h2 className="text-xl font-semibold mb-3">Measurements</h2>
+                        <div className="space-y-3">
+                            {measurements.map((p) => (
+                                <Link
+                                    key={p.id}
+                                    href={`/measurements/${p.id}`}
+                                    className="block border p-4 rounded"
+                                >
+                                    Inspector: {p.users?.name}
+                                    {" | "}
+                                    Date: {new Date(p.date).toLocaleDateString()}
+                                </Link>
+                            ))}
+                        </div>
+                    </>
+                )}
             </div>
 
             {user.role === USER_ROLES.ADMIN && (

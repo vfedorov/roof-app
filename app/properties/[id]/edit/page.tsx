@@ -8,10 +8,15 @@ export default async function EditPropertyPage({ params }: PageProps<"/propertie
 
     if (!property) throw new Error("Property not found");
 
+    const { data: measurements } = await supabase
+        .from("measurement_sessions")
+        .select("*, users(name)")
+        .eq("property_id", id);
+
     return (
         <div className="form-control">
             <h1 className="form-title">Edit Property</h1>
-            <EditPropertyForm id={id} property={property} />
+            <EditPropertyForm id={id} property={property} measurements={measurements} />
         </div>
     );
 }

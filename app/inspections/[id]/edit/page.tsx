@@ -23,6 +23,11 @@ export default async function EditInspectionPage({ params }: PageProps<"/inspect
         return <div>Inspection not found</div>;
     }
 
+    const { data: measurements } = await supabase
+        .from("measurement_sessions")
+        .select("*, users(name)")
+        .eq("inspection_id", id);
+
     if (inspection.inspection_status?.locked && user.role !== USER_ROLES.ADMIN) {
         return (
             <div className="page">
@@ -65,6 +70,7 @@ export default async function EditInspectionPage({ params }: PageProps<"/inspect
                             statusTypes={statusTypes}
                             currentStatusTypeId={inspection.inspection_status?.status_type_id}
                             allowEditPhotos={user.role === USER_ROLES.INSPECTOR}
+                            measurements={measurements}
                         />
                     </div>
                 </div>

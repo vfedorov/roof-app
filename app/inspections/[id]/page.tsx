@@ -20,6 +20,10 @@ export default async function InspectionDetailPage({ params }: PageProps<"/inspe
         )
         .eq("id", id)
         .single();
+    const { data: measurements } = await supabase
+        .from("measurement_sessions")
+        .select("*, users(name)")
+        .eq("inspection_id", id);
 
     if (!inspection) return <div>Inspection not found</div>;
     const is_locked = inspection.inspection_status?.locked;
@@ -126,6 +130,22 @@ export default async function InspectionDetailPage({ params }: PageProps<"/inspe
                         </p>
                     </div>
                     <SectionRenderer inspectionId={id} sections={sections} />
+                    {measurements && measurements.length > 0 && (
+                        <>
+                            <h2 className="text-xl font-semibold mb-3">Measurements</h2>
+                            <div className="space-y-3">
+                                {measurements.map((p) => (
+                                    <Link
+                                        key={p.id}
+                                        href={`/measurements/${p.id}`}
+                                        className="block border p-4 rounded"
+                                    >
+                                        {new Date(p.date).toLocaleDateString()}
+                                    </Link>
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

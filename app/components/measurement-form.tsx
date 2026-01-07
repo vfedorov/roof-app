@@ -185,9 +185,11 @@ export default function MeasurementForm({
                 />
             </div>
             {/* Measurement Images */}
-            <div className="mt-6">
-                <MeasurementImageManager measurementId={measurement!.id} allowUpload={true} />
-            </div>
+            {measurement && (
+                <div className="mt-6">
+                    <MeasurementImageManager measurementId={measurement.id} allowUpload={true} />
+                </div>
+            )}
 
             {/* SUBMIT */}
             <button className="btn w-full mt-4" type="submit">

@@ -4,6 +4,8 @@ import Image from "next/image";
 import React, { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/app/components/providers/toast-provider";
 import { supabase } from "@/lib/supabase/supabase";
+import { useRouter } from "next/navigation";
+import ConfirmDialog from "@/app/components/ui/confirm-dialog";
 
 const MAX_FILES = 20;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -37,14 +39,12 @@ export default function MeasurementImageManager({
     const [files, setFiles] = useState<File[]>([]);
     const [images, setImages] = useState<MeasurementImage[]>([]);
     const [loading, setLoading] = useState(false);
-    // const [confirmImage, setConfirmImage] = useState<MeasurementImage | null>(null);
-    const [isSettingScale, setIsSettingScale] = useState(false);
+    const [confirmBaseImage, setConfirmBaseImage] = useState<MeasurementImage | null>(null);
+    const [confirmDeleteImage, setConfirmDeleteImage] = useState<MeasurementImage | null>(null);
     const [scalePoints, setScalePoints] = useState<{ x: number; y: number }[]>([]);
     const [scale, setScale] = useState<number | null>(null);
-    const [feet, setFeet] = useState(0);
-    const [inches, setInches] = useState(0);
-    const [isSettingScaleModalOpen, setIsSettingScaleModalOpen] = useState(false);
 
+    const router = useRouter();
     const [imageDimensions, setImageDimensions] = useState<ImageDimensions>({});
 
     const handleImageLoad = (imgId: number, e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -167,15 +167,8 @@ export default function MeasurementImageManager({
     // --------------------------------------------------
     // Set Base Image
     // --------------------------------------------------
-    const handleSetBaseImage = async (img: MeasurementImage) => {
-        console.log("handleSetBaseImage");
-        if (img.is_base_image) return;
-
-        const confirm = window.confirm(
-            "Changing the base image will remove all existing measurements and scale. Continue?",
-        );
-
-        if (!confirm) return;
+    const handleConfirmSetBaseImage = async () => {
+        if (!confirmBaseImage) return;
 
         // Drop previous base image
         const resetRes = await fetch(`/api/measurements/${measurementId}/images/base/reset`, {
@@ -184,16 +177,21 @@ export default function MeasurementImageManager({
 
         if (!resetRes.ok) {
             toast({ title: "Failed to reset base image", variant: "destructive" });
+            setConfirmBaseImage(null);
             return;
         }
 
         // Set new base image
-        const setRes = await fetch(`/api/measurements/${measurementId}/images/${img.id}/set-base`, {
-            method: "POST",
-        });
+        const setRes = await fetch(
+            `/api/measurements/${measurementId}/images/${confirmBaseImage.id}/set-base`,
+            {
+                method: "POST",
+            },
+        );
 
         if (!setRes.ok) {
             toast({ title: "Failed to set base image", variant: "destructive" });
+            setConfirmBaseImage(null);
             return;
         }
 
@@ -204,79 +202,29 @@ export default function MeasurementImageManager({
 
         if (!scaleResetRes.ok) {
             toast({ title: "Failed to reset scale", variant: "destructive" });
+            setConfirmBaseImage(null);
             return;
         }
 
         setScale(null);
         setScalePoints([]);
-        setIsSettingScale(false);
 
         // Update the local state
         setImages((prev) =>
             prev.map((i) => ({
                 ...i,
-                is_base_image: i.id === img.id,
+                is_base_image: i.id === confirmBaseImage.id,
             })),
         );
+
+        setConfirmBaseImage(null);
     };
 
-    // --------------------------------------------------
-    // Scale handling
-    // --------------------------------------------------
-    const handleScaleClick = (e: React.MouseEvent<HTMLImageElement>, img: MeasurementImage) => {
-        console.log("handleScaleClick");
-        if (!img.is_base_image) return;
+    const handleSetBaseImage = async (img: MeasurementImage) => {
+        if (img.is_base_image) return;
 
-        if (scalePoints.length === 0) {
-            setIsSettingScale(true);
-        }
-
-        // const rect = e.currentTarget.getBoundingClientRect();
-        // const rect_x = e.clientX - rect.left;
-        // const rect_y = e.clientY - rect.top;
-        const rect_x = e.nativeEvent.offsetX;
-        const rect_y = e.nativeEvent.offsetY - 20;
-
-        const dimensions = imageDimensions[img.id];
-        if (!dimensions) {
-            console.error("Image dimensions not loaded yet");
-            return;
-        }
-
-        const x = (rect_x / dimensions.displayedWidth) * dimensions.naturalWidth;
-        const y = (rect_y / dimensions.displayedHeight) * dimensions.naturalHeight;
-
-        setScalePoints((prev) => {
-            const newPoints = [...prev, { x, y }];
-            if (newPoints.length === 2) {
-                setIsSettingScale(false);
-                setIsSettingScaleModalOpen(true);
-            }
-            return newPoints.slice(-2);
-        });
-    };
-
-    const handleSaveScale = async () => {
-        console.log("handleSaveScale");
-        const totalFeet = feet + inches / 12;
-
-        const { error } = await supabase
-            .from("measurement_sessions")
-            .update({
-                scale: totalFeet,
-                scale_points: scalePoints,
-            })
-            .eq("id", measurementId);
-
-        if (error) {
-            toast({ title: "Failed to save scale", variant: "destructive" });
-            return;
-        }
-
-        setScale(totalFeet);
-        setIsSettingScaleModalOpen(false);
-        setFeet(0);
-        setInches(0);
+        setConfirmBaseImage(img);
+        return;
     };
 
     // --------------------------------------------------
@@ -307,8 +255,13 @@ export default function MeasurementImageManager({
         if (img.is_base_image) {
             setScale(null);
             setScalePoints([]);
-            setIsSettingScale(false);
         }
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!confirmDeleteImage) return;
+        await performDelete(confirmDeleteImage);
+        setConfirmDeleteImage(null);
     };
 
     // --------------------------------------------------
@@ -372,135 +325,114 @@ export default function MeasurementImageManager({
                                 allowUpload ? "cursor-pointer" : "cursor-default"
                             }`}
                         >
-                            <div className="text-sm text-gray-600 flex justify-between">
+                            <div className="text-base text-gray-600 flex justify-between">
                                 {img.is_base_image ? (
                                     <span className="text-blue-600 font-semibold">Base Image</span>
                                 ) : (
                                     "Reference"
                                 )}
                                 {img.is_base_image && (
-                                    <span className="text-xs bg-gray-200 px-1 rounded">
+                                    <span className="bg-gray-200 px-1 rounded">
                                         Scale: {scale ? `${scale.toFixed(2)} ft` : "Not set"}
                                     </span>
                                 )}
                             </div>
 
-                            <div className="relative">
-                                <Image
-                                    src={img.image_url}
-                                    alt="Measurement"
-                                    width={400}
-                                    height={260}
-                                    className={`h-full w-full object-cover rounded border group-hover:opacity-90 transition ${
-                                        img.is_base_image ? "ring-2 ring-blue-500" : ""
-                                    }`}
-                                    unoptimized
-                                    onClick={(e) => {
-                                        if (allowUpload && img.is_base_image && scale === null) {
-                                            handleScaleClick(e, img);
-                                        }
-                                    }}
-                                    onLoad={(e) => handleImageLoad(img.id, e)}
-                                />
+                            <div>
+                                <div className="relative">
+                                    <Image
+                                        src={img.image_url}
+                                        alt="Measurement"
+                                        width={400}
+                                        height={260}
+                                        className={`h-full w-full object-cover rounded border group-hover:opacity-90 transition ${
+                                            img.is_base_image ? "ring-2 ring-blue-500" : ""
+                                        }`}
+                                        unoptimized
+                                        onLoad={(e) => handleImageLoad(img.id, e)}
+                                    />
 
-                                {img.is_base_image &&
-                                    (scalePoints.length > 0 || isSettingScale) &&
-                                    imageDimensions[img.id] && (
-                                        <svg
-                                            className="absolute inset-0 pointer-events-none"
-                                            width="100%"
-                                            height="100%"
-                                            viewBox={`0 0 ${imageDimensions[img.id].naturalWidth} ${imageDimensions[img.id].naturalHeight}`}
-                                            preserveAspectRatio="xMidYMid meet"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                        >
-                                            {(() => {
-                                                const scaleRatio =
-                                                    imageDimensions[img.id]?.naturalWidth /
-                                                        imageDimensions[img.id]?.displayedWidth ||
-                                                    1;
+                                    {img.is_base_image &&
+                                        scalePoints.length > 0 &&
+                                        imageDimensions[img.id] && (
+                                            <svg
+                                                className="absolute inset-0 pointer-events-none"
+                                                width="100%"
+                                                height="100%"
+                                                viewBox={`0 0 ${imageDimensions[img.id].naturalWidth} ${imageDimensions[img.id].naturalHeight}`}
+                                                preserveAspectRatio="xMidYMid meet"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                            >
+                                                {(() => {
+                                                    const scaleRatio =
+                                                        imageDimensions[img.id]?.naturalWidth /
+                                                            imageDimensions[img.id]
+                                                                ?.displayedWidth || 1;
 
-                                                return (
-                                                    <>
-                                                        {scalePoints.map((p, i) => (
-                                                            <circle
-                                                                key={i}
-                                                                cx={p.x}
-                                                                cy={p.y}
-                                                                r={4 * scaleRatio}
-                                                                fill="red"
-                                                                stroke="white"
-                                                                strokeWidth={2 * scaleRatio}
-                                                            />
-                                                        ))}
-                                                        {scalePoints.length === 2 && (
-                                                            <line
-                                                                x1={scalePoints[0].x}
-                                                                y1={scalePoints[0].y}
-                                                                x2={scalePoints[1].x}
-                                                                y2={scalePoints[1].y}
-                                                                stroke="red"
-                                                                strokeWidth={4 * scaleRatio}
-                                                                strokeDasharray={`${4 * scaleRatio} ${6 * scaleRatio}`}
-                                                            />
-                                                        )}
-                                                    </>
-                                                );
-                                            })()}
-                                        </svg>
-                                    )}
+                                                    return (
+                                                        <>
+                                                            {scalePoints.map((p, i) => (
+                                                                <circle
+                                                                    key={i}
+                                                                    cx={p.x}
+                                                                    cy={p.y}
+                                                                    r={4 * scaleRatio}
+                                                                    fill="red"
+                                                                    stroke="white"
+                                                                    strokeWidth={2 * scaleRatio}
+                                                                />
+                                                            ))}
+                                                            {scalePoints.length === 2 && (
+                                                                <line
+                                                                    x1={scalePoints[0].x}
+                                                                    y1={scalePoints[0].y}
+                                                                    x2={scalePoints[1].x}
+                                                                    y2={scalePoints[1].y}
+                                                                    stroke="red"
+                                                                    strokeWidth={4 * scaleRatio}
+                                                                    strokeDasharray={`${4 * scaleRatio} ${6 * scaleRatio}`}
+                                                                />
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
+                                            </svg>
+                                        )}
+                                </div>
 
                                 {/* Mobile actions */}
                                 {allowUpload && (
                                     <div className="flex gap-2 mt-2">
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (img.is_base_image) {
-                                                    const confirmed = window.confirm(
-                                                        "Reset scale? This will remove existing scale and allow you to set new points.",
+                                        {img.is_base_image ? (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    router.push(
+                                                        `/measurements/${measurementId}/images/${img.id}/scale`,
                                                     );
-                                                    if (confirmed) {
-                                                        fetch(
-                                                            `/api/measurements/${measurementId}/scale/reset`,
-                                                            { method: "POST" },
-                                                        )
-                                                            .then(() => {
-                                                                setScale(null);
-                                                                setScalePoints([]);
-                                                                setIsSettingScale(true);
-                                                            })
-                                                            .catch(() => {
-                                                                toast({
-                                                                    title: "Failed to reset scale",
-                                                                    variant: "destructive",
-                                                                });
-                                                            });
-                                                    }
-                                                } else {
-                                                    handleSetBaseImage(img);
-                                                }
-                                            }}
-                                            className={`flex-1 text-sm border rounded py-1 text-center ${
-                                                img.is_base_image
-                                                    ? "bg-blue-100 text-blue-700"
-                                                    : "bg-gray-100 text-gray-700"
-                                            }`}
-                                        >
-                                            {img.is_base_image ? "✅ Base" : "🔄 Set Base"}
-                                        </button>
-
+                                                }}
+                                                className="flex-1 text-sm border rounded py-1 text-center bg-blue-100 text-blue-700"
+                                            >
+                                                ✏️ Edit Scale
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setConfirmBaseImage(img);
+                                                }}
+                                                className="flex-1 text-sm border rounded py-1 text-center bg-gray-100 text-gray-700"
+                                            >
+                                                🔄 Set Base
+                                            </button>
+                                        )}
                                         <button
                                             type="button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                const confirmed = window.confirm(
-                                                    "Are you sure you want to delete this image? This action cannot be undone.",
-                                                );
-                                                if (confirmed) {
-                                                    performDelete(img);
-                                                }
+                                                setConfirmDeleteImage(img);
                                             }}
                                             className="flex-1 text-sm border border-red-500 text-red-600 rounded py-1"
                                         >
@@ -514,66 +446,27 @@ export default function MeasurementImageManager({
                 </div>
             </div>
 
-            {/* Scale Modal */}
-            {isSettingScaleModalOpen && (
-                <div className="fixed inset-0 bg-gray-600 bg-opacity-80 flex items-center justify-center z-50">
-                    <div className="bg-gray-800 p-6 rounded shadow-lg w-80">
-                        <h3 className="font-medium mb-4">Enter Real Distance</h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block mb-1">Feet</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={feet}
-                                    onChange={(e) => setFeet(Number(e.target.value))}
-                                    className="input w-full"
-                                />
-                            </div>
-                            <div>
-                                <label className="block mb-1">Inches</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="11"
-                                    value={inches}
-                                    onChange={(e) => setInches(Number(e.target.value))}
-                                    className="input w-full"
-                                />
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={handleSaveScale}
-                                    className="btn w-full"
-                                >
-                                    Save
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsSettingScaleModalOpen(false)}
-                                    className="btn btn-secondary w-full"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Confirm Set Base */}
+            <ConfirmDialog
+                open={!!confirmBaseImage}
+                title="Change Base Image?"
+                description="Changing the base image will remove all existing measurements and scale. This action cannot be undone."
+                confirmLabel="Change Base Image"
+                destructive={true}
+                onCancel={() => setConfirmBaseImage(null)}
+                onConfirm={handleConfirmSetBaseImage}
+            />
 
-            {/*<ConfirmDialog*/}
-            {/*    open={!!confirmImage}*/}
-            {/*    title="Delete image?"*/}
-            {/*    description="This action cannot be undone."*/}
-            {/*    confirmLabel="Delete Image"*/}
-            {/*    destructive*/}
-            {/*    onCancel={() => setConfirmImage(null)}*/}
-            {/*    onConfirm={async () => {*/}
-            {/*        await performDelete(confirmImage);*/}
-            {/*        setConfirmImage(null);*/}
-            {/*    }}*/}
-            {/*/>*/}
+            {/* Confirm Delete */}
+            <ConfirmDialog
+                open={!!confirmDeleteImage}
+                title="Delete Image?"
+                description="Are you sure you want to delete this image? This action cannot be undone."
+                confirmLabel="Delete Image"
+                destructive={true}
+                onCancel={() => setConfirmDeleteImage(null)}
+                onConfirm={handleConfirmDelete}
+            />
         </div>
     );
 }

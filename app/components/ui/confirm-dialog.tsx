@@ -29,11 +29,12 @@ export default function ConfirmDialog({
                 <p className="text-sm text-gray-600 dark:text-gray-300">{description}</p>
 
                 <div className="flex gap-3 pt-2">
-                    <button onClick={onCancel} className="flex-1 btn-outline">
+                    <button type="button" onClick={onCancel} className="flex-1 btn-outline">
                         {cancelLabel}
                     </button>
 
                     <button
+                        type="button"
                         onClick={onConfirm}
                         className={`flex-1 ${destructive ? "btn-danger" : "btn"}`}
                     >

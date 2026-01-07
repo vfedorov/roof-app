@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/supabase";
 import { deleteMeasurement } from "../actions";
+import MeasurementImageManager from "@/app/components/measurement-image-manager";
 
 export default async function InspectionDetailPage({ params }: PageProps<"/inspections/[id]">) {
     const { id } = await params;
@@ -56,6 +57,12 @@ export default async function InspectionDetailPage({ params }: PageProps<"/inspe
                                     {measurement.notes || "No notes yet"}
                                 </p>
                             </div>
+                        </div>
+                        <div className="space-y-1">
+                            <MeasurementImageManager
+                                measurementId={measurement!.id}
+                                allowUpload={false}
+                            />
                         </div>
                     </div>
                 </div>

@@ -414,7 +414,7 @@ export default function MeasurementImageManager({
                                                 }}
                                                 className="flex-1 text-sm border rounded py-1 text-center bg-blue-100 text-blue-700"
                                             >
-                                                ✏️ Edit Scale
+                                                ️📏 Edit Scale
                                             </button>
                                         ) : (
                                             <button
@@ -426,6 +426,20 @@ export default function MeasurementImageManager({
                                                 className="flex-1 text-sm border rounded py-1 text-center bg-gray-100 text-gray-700"
                                             >
                                                 🔄 Set Base
+                                            </button>
+                                        )}
+                                        {img.is_base_image && scale !== null && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    router.push(
+                                                        `/measurements/${measurementId}/draw`,
+                                                    );
+                                                }}
+                                                className="flex-1 text-sm border rounded py-1 text-center bg-green-100 text-green-700"
+                                            >
+                                                ✏️ Draw
                                             </button>
                                         )}
                                         <button

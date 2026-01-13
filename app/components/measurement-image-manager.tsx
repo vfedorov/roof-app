@@ -43,6 +43,7 @@ export default function MeasurementImageManager({
     const [confirmDeleteImage, setConfirmDeleteImage] = useState<MeasurementImage | null>(null);
     const [scalePoints, setScalePoints] = useState<{ x: number; y: number }[]>([]);
     const [scale, setScale] = useState<number | null>(null);
+    const [shapes, setShapes] = useState<any[]>([]);
 
     const router = useRouter();
     const [imageDimensions, setImageDimensions] = useState<ImageDimensions>({});
@@ -102,6 +103,12 @@ export default function MeasurementImageManager({
                 if (sessionData && !cancelled) {
                     setScale(sessionData.scale);
                     setScalePoints(sessionData.scale_points || []);
+                }
+
+                const shapesRes = await fetch(`/api/measurements/${measurementId}/shapes`);
+                if (!cancelled) {
+                    const shapesData = await shapesRes.json();
+                    setShapes(shapesData.shapes || []);
                 }
             }
         })();
@@ -206,6 +213,17 @@ export default function MeasurementImageManager({
             return;
         }
 
+        // clear the shapes
+        const shapesClearRes = await fetch(`/api/measurements/${measurementId}/shapes`, {
+            method: "DELETE",
+        });
+
+        if (!shapesClearRes.ok) {
+            toast({ title: "Failed to clear shapes", variant: "destructive" });
+            setConfirmBaseImage(null);
+            return;
+        }
+
         setScale(null);
         setScalePoints([]);
 
@@ -231,7 +249,6 @@ export default function MeasurementImageManager({
     // Delete image
     // --------------------------------------------------
     const performDelete = async (img: MeasurementImage) => {
-        console.log("performDelete");
         if (!img) {
             return;
         }
@@ -396,6 +413,52 @@ export default function MeasurementImageManager({
                                                         </>
                                                     );
                                                 })()}
+
+                                                {shapes.map((shape, idx) => {
+                                                    const scaleRatio =
+                                                        imageDimensions[img.id]?.naturalWidth /
+                                                            imageDimensions[img.id]
+                                                                ?.displayedWidth || 1;
+
+                                                    if (
+                                                        shape.shape_type === "line" &&
+                                                        shape.points.length === 2
+                                                    ) {
+                                                        const [p1, p2] = shape.points;
+                                                        return (
+                                                            <line
+                                                                key={`shape-${idx}`}
+                                                                x1={p1.x}
+                                                                y1={p1.y}
+                                                                x2={p2.x}
+                                                                y2={p2.y}
+                                                                stroke="red"
+                                                                strokeWidth={2 * scaleRatio}
+                                                                // strokeDasharray={`${4 * scaleRatio} ${6 * scaleRatio}`}
+                                                            />
+                                                        );
+                                                    }
+
+                                                    if (
+                                                        shape.shape_type === "polygon" &&
+                                                        shape.points.length >= 3
+                                                    ) {
+                                                        const pointsStr = shape.points
+                                                            .map((p: any) => `${p.x},${p.y}`)
+                                                            .join(" ");
+                                                        return (
+                                                            <polygon
+                                                                key={`shape-${idx}`}
+                                                                points={pointsStr}
+                                                                fill="rgba(255, 0, 0, 0.2)"
+                                                                stroke="red"
+                                                                strokeWidth={2 * scaleRatio}
+                                                            />
+                                                        );
+                                                    }
+
+                                                    return null;
+                                                })}
                                             </svg>
                                         )}
                                 </div>

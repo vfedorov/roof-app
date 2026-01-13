@@ -333,11 +333,15 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             selectable: true,
             hasControls: true,
             strokeUniform: true,
+            cornerColor: "red",
+            cornerStrokeColor: "red",
+            transparentCorners: true,
         });
 
         finalPolygon.set({
             originX: "left",
             originY: "top",
+            cornerStyle: "circle",
         });
 
         //const areaSqFt = calculatePolygonArea(polygonPointsRef.current);
@@ -530,9 +534,9 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 throw new Error("Failed to clear shapes");
             }
 
-            toast({ title: "Success", description: "Shapes cleared successfully!" });
+            // toast({ title: "Success", description: "Shapes cleared successfully!" });
         } catch (error) {
-            toast({ title: "Error", description: "Failed to clear shapes." });
+            // toast({ title: "Error", description: "Failed to clear shapes." });
             console.error(error);
         }
 
@@ -577,6 +581,37 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     // ───────────────────────────────────────────────
     // Initializing Fabric.js canvas
     // ───────────────────────────────────────────────
+    // useEffect(() => {
+    //     if (!canvasRef.current) return;
+    //
+    //     const canvas = new fabric.Canvas(canvasRef.current, {
+    //         preserveObjectStacking: true,
+    //         selection: true,
+    //         backgroundColor: "transparent",
+    //     });
+    //     fabricRef.current = canvas;
+    //
+    //     canvas.on("mouse:down", handleMouseDown);
+    //     canvas.on("mouse:dblclick", handleDblClick);
+    //
+    //     const resizeCanvas = () => {
+    //         if (!canvasWrapperRef.current) return;
+    //         const width = canvasWrapperRef.current.clientWidth;
+    //         const height = canvasWrapperRef.current.clientHeight;
+    //         canvas.setDimensions({ width, height });
+    //     };
+    //
+    //     resizeCanvas();
+    //     window.addEventListener("resize", resizeCanvas);
+    //
+    //     return () => {
+    //         canvas.off("mouse:down", handleMouseDown);
+    //         canvas.off("mouse:dblclick", handleDblClick);
+    //         window.removeEventListener("resize", resizeCanvas);
+    //         canvas.dispose();
+    //     };
+    // }, []);
+
     useEffect(() => {
         if (!canvasRef.current) return;
 
@@ -590,24 +625,166 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         canvas.on("mouse:down", handleMouseDown);
         canvas.on("mouse:dblclick", handleDblClick);
 
-        const resizeCanvas = () => {
-            if (!canvasWrapperRef.current) return;
-            const width = canvasWrapperRef.current.clientWidth;
-            const height = canvasWrapperRef.current.clientHeight;
-            canvas.setDimensions({ width, height });
+        const resizeAndScaleContent = () => {
+            if (!canvasWrapperRef.current || !baseImageUrl) return;
+
+            const wrapperWidth = canvasWrapperRef.current.clientWidth;
+            const wrapperHeight = canvasWrapperRef.current.clientHeight;
+
+            const bgImage = canvas.getObjects().find((obj) => (obj as any).isBackgroundImage);
+
+            if (bgImage) {
+                const img = bgImage as fabric.Image;
+                const scaleImg = wrapperWidth / img.width!;
+                const scaledHeight = img.height! * scaleImg;
+
+                canvas.setDimensions({ width: wrapperWidth, height: scaledHeight });
+
+                img.set({
+                    scaleX: scaleImg,
+                    scaleY: scaleImg,
+                    left: 0,
+                    top: 0,
+                });
+
+                const naturalWidth = (img._element as HTMLImageElement).naturalWidth;
+                const naturalHeight = (img._element as HTMLImageElement).naturalHeight;
+                setImageDimensions({ naturalWidth, naturalHeight });
+
+                const existing = canvas.getObjects();
+                existing.forEach((obj) => {
+                    if ((obj as any).isScaleElement) {
+                        canvas.remove(obj);
+                    }
+                });
+                const displayedWidth = wrapperWidth;
+                const displayedHeight = scaledHeight;
+
+                const coefX = displayedWidth / naturalWidth;
+                const coefY = displayedHeight / naturalHeight;
+                if (scalePoints.length === 2) {
+                    const scaleLineStart = {
+                        x: scalePoints[0].x * coefX,
+                        y: scalePoints[0].y * coefY,
+                    };
+                    const scaleLineEnd = {
+                        x: scalePoints[1].x * coefX,
+                        y: scalePoints[1].y * coefY,
+                    };
+
+                    const r = 6;
+                    const scaleLine = new fabric.Line(
+                        [scaleLineStart.x, scaleLineStart.y, scaleLineEnd.x, scaleLineEnd.y],
+                        {
+                            stroke: "blue",
+                            strokeWidth: 4,
+                            strokeDashArray: [5, 5],
+                            selectable: false,
+                            evented: false,
+                            lockMovementX: true,
+                            lockMovementY: true,
+                        },
+                    );
+                    (scaleLine as any).isScaleElement = true;
+
+                    const circle1 = new fabric.Circle({
+                        left: scaleLineStart.x - r,
+                        top: scaleLineStart.y - r,
+                        radius: r,
+                        fill: "blue",
+                        stroke: "white",
+                        strokeWidth: 2,
+                        selectable: false,
+                        evented: false,
+                    });
+                    const circle2 = new fabric.Circle({
+                        left: scaleLineEnd.x - r,
+                        top: scaleLineEnd.y - r,
+                        radius: r,
+                        fill: "blue",
+                        stroke: "white",
+                        strokeWidth: 2,
+                        selectable: false,
+                        evented: false,
+                    });
+                    (circle1 as any).isScaleElement = true;
+                    (circle2 as any).isScaleElement = true;
+
+                    canvas.add(scaleLine, circle1, circle2);
+                }
+                // const shapes = canvas
+                //     .getObjects()
+                //     .filter(
+                //         (obj) =>
+                //             (obj.type === "line" || obj.type === "polygon") &&
+                //             !(obj as any).isTemp &&
+                //             !(obj as any).isScaleElement,
+                //     );
+                // shapes.forEach((shape) => {
+                //     if (shape.type === "line") {
+                //         const coords = shape.getCoords();
+                //         const p1 = { x: coords[0].x, y: coords[0].y };
+                //         const p2 = { x: coords[2].x, y: coords[2].y };
+                //
+                //         // Пересчёт координат относительно нового масштаба
+                //         const newP1 = {
+                //             x: p1.x, // / imageDimensions.naturalWidth) * wrapperWidth,
+                //             y: p1.y, // / imageDimensions.naturalHeight) * scaledHeight,
+                //         };
+                //         const newP2 = {
+                //             x: p2.x, // / imageDimensions.naturalWidth) * wrapperWidth,
+                //             y: p2.y, // / imageDimensions.naturalHeight) * scaledHeight,
+                //         };
+                //
+                //         // Обновление линии
+                //         const dx = newP2.x - newP1.x;
+                //         const dy = newP2.y - newP1.y;
+                //         const length = Math.sqrt(dx * dx + dy * dy);
+                //         const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+                //
+                //         shape.set({
+                //             left: newP1.x,
+                //             top: newP1.y,
+                //             angle: angle,
+                //         });
+                //
+                //         // Обновление текста
+                //         const text = (shape as any).associatedText;
+                //         if (text) {
+                //             const lineCenterX = (newP1.x + newP2.x) / 2 - 25;
+                //             const lineCenterY = (newP1.y + newP2.y) / 2 - 10;
+                //             text.set({
+                //                 left: lineCenterX,
+                //                 top: lineCenterY,
+                //             });
+                //         }
+                //     } else if (shape.type === "polygon") {
+                //         const points = (shape as fabric.Polygon).points.map((point) => ({
+                //             x: point.x,
+                //             y: point.y,
+                //         }));
+                //
+                //         shape.set({
+                //             points: points,
+                //         });
+                //     }
+                // });
+                canvas.renderAll();
+            } else {
+                canvas.setDimensions({ width: wrapperWidth, height: wrapperHeight });
+            }
         };
 
-        resizeCanvas();
-        window.addEventListener("resize", resizeCanvas);
+        resizeAndScaleContent();
+        window.addEventListener("resize", resizeAndScaleContent);
 
         return () => {
             canvas.off("mouse:down", handleMouseDown);
             canvas.off("mouse:dblclick", handleDblClick);
-            window.removeEventListener("resize", resizeCanvas);
+            window.removeEventListener("resize", resizeAndScaleContent);
             canvas.dispose();
         };
-    }, []);
-
+    }, [baseImageUrl, scalePoints]);
     // ───────────────────────────────────────────────
     // Loading the background image and the scale line
     // ───────────────────────────────────────────────
@@ -747,8 +924,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     const points = shape.points.map((p: any) => ({
                         x: (p.x / naturalWidth) * canvasWidth,
                         y: (p.y / naturalHeight) * canvasHeight,
-                        // x: p.x,
-                        // y: p.y,
                     }));
                     if (shape.shape_type === "line") {
                         const [p1, p2] = points;
@@ -847,10 +1022,14 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                             selectable: true,
                             hasControls: true,
                             strokeUniform: true,
+                            cornerColor: "red",
+                            cornerStrokeColor: "red",
+                            transparentCorners: true,
                         });
                         polygon.set({
                             originX: "left",
                             originY: "top",
+                            cornerStyle: "circle",
                         });
 
                         const text = new fabric.IText(shape.label || "0.00 sq ft", {
@@ -908,15 +1087,20 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     return (
         <div className="p-4 space-y-4">
             <div className="flex items-center justify-between">
-                <button onClick={() => router.back()} className="btn">
-                    ← Back
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => router.back()} className="btn">
+                        ← Back
+                    </button>
+                    <button type="button" className="btn btn-success" onClick={handleSaveShapes}>
+                        Save Shapes
+                    </button>
+                </div>
+
                 {scale !== null && (
                     <div className="text-lg font-semibold">Scale: {scale.toFixed(2)} ft</div>
                 )}
             </div>
-
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
                 <button
                     type="button"
                     className={`btn ${activeTool === "select" ? "btn-danger" : "btn-outline"}`}
@@ -963,14 +1147,16 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 <button type="button" className="btn btn-outline" onClick={handleDeleteSelected}>
                     Delete
                 </button>
+                {activeTool === "polygon" && (
+                    <span className="text-sm text-gray-300 ml-2">
+                        Double-click to complete the polygon creation.
+                    </span>
+                )}
             </div>
 
             <div ref={canvasWrapperRef} className="border shadow-md w-full h-[70vh]">
                 <canvas ref={canvasRef} />
             </div>
-            <button type="button" className="btn btn-success" onClick={handleSaveShapes}>
-                Save Shapes
-            </button>
         </div>
     );
 }

@@ -42,6 +42,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
     const isLongPressActiveRef = useRef(false);
     const [isMagnifierActive, setIsMagnifierActive] = useState(false);
+    const [hasSelection, setHasSelection] = useState(false);
 
     const [editingMetadata, setEditingMetadata] = useState<{
         id: string;
@@ -797,6 +798,10 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         });
         fabricRef.current = canvas;
 
+        canvas.on("selection:created", () => setHasSelection(true));
+        canvas.on("selection:updated", () => setHasSelection(true));
+        canvas.on("selection:cleared", () => setHasSelection(false));
+
         canvas.on("mouse:down", handlePointerDown);
         canvas.on("mouse:up", handlePointerUpOrCancel);
         canvas.on("mouse:dblclick", handleDblClick);
@@ -1452,15 +1457,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     >
                         🔍 Magnify
                     </button>
-                    {activeTool === "polygon" && polygonPointCount >= 3 && (
-                        <button
-                            type="button"
-                            className="btn btn-danger"
-                            onClick={() => finalizePolygon()}
-                        >
-                            Finish Polygon
-                        </button>
-                    )}
                     {/*<button*/}
                     {/*    type="button"*/}
                     {/*    className="btn btn-outline"*/}
@@ -1494,63 +1490,59 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     <div className="text-lg font-semibold">Scale: {scale.toFixed(2)} ft</div>
                 )}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-                <button
-                    type="button"
-                    className={`btn ${activeTool === "select" ? "btn-danger" : "btn-outline"}`}
-                    onClick={() => {
-                        setActiveTool("select");
-                        startPointRef.current = null;
-                        polygonPointsRef.current = [];
-                        setPolygonPointCount(0);
-                        if (fabricRef.current) {
-                            if (tempStartPointRef.current)
-                                fabricRef.current.remove(tempStartPointRef.current);
-                            if (tempTextRef.current) fabricRef.current.remove(tempTextRef.current);
-                            if (tempPolygonRef.current)
-                                fabricRef.current.remove(tempPolygonRef.current);
-                            if (tempPolygonTextRef.current)
-                                fabricRef.current.remove(tempPolygonTextRef.current);
-                            tempStartPointRef.current = null;
-                            tempTextRef.current = null;
-                            tempPolygonRef.current = null;
-                            tempPolygonTextRef.current = null;
-                        }
-                    }}
-                >
-                    Select
-                </button>
-                <button
-                    type="button"
-                    className={`btn ${activeTool === "line" ? "btn-danger" : "btn-outline"}`}
-                    onClick={() => {
-                        setActiveTool("line");
-                    }}
-                >
-                    Line
-                </button>
 
-                <button
-                    type="button"
-                    className={`btn ${activeTool === "polygon" ? "btn-danger" : "btn-outline"}`}
-                    onClick={() => {
-                        setActiveTool("polygon");
-                    }}
-                >
-                    Polygon
-                </button>
-                <button type="button" className="btn btn-outline" onClick={handleDeleteSelected}>
-                    Delete
-                </button>
-                {activeTool === "polygon" && (
-                    <span className="text-sm text-gray-300 ml-2">
-                        Tap <strong>Finish Polygon</strong> or double-tap to close the shape.
-                    </span>
-                )}
-            </div>
-
-            <div ref={canvasWrapperRef} className="border shadow-md w-full h-[70vh]">
+            <div ref={canvasWrapperRef} className="relative border shadow-md w-full h-[70vh]">
                 <canvas ref={canvasRef} />
+                <div className="absolute top-4 left-4 z-10 bg-black/70 backdrop-blur rounded-lg p-2 flex gap-2">
+                    <button
+                        type="button"
+                        className={`btn btn-sm ${activeTool === "select" ? "btn-danger" : "btn-outline"}`}
+                        onClick={() => {
+                            setActiveTool("select");
+                            startPointRef.current = null;
+                            polygonPointsRef.current = [];
+                            setPolygonPointCount(0);
+                        }}
+                    >
+                        Select
+                    </button>
+
+                    <button
+                        type="button"
+                        className={`btn btn-sm ${activeTool === "line" ? "btn-danger" : "btn-outline"}`}
+                        onClick={() => {
+                            setActiveTool("line");
+                        }}
+                    >
+                        Line
+                    </button>
+
+                    <button
+                        type="button"
+                        className={`btn btn-sm ${activeTool === "polygon" ? "btn-danger" : "btn-outline"}`}
+                        onClick={() => {
+                            setActiveTool("polygon");
+                        }}
+                    >
+                        Polygon
+                    </button>
+                </div>
+                <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
+                    {activeTool === "polygon" && polygonPointCount >= 3 && (
+                        <button className="btn btn-danger shadow-lg" onClick={finalizePolygon}>
+                            Finish Polygon
+                        </button>
+                    )}
+
+                    {activeTool === "select" && hasSelection && (
+                        <button
+                            className="btn btn-outline btn-error shadow-lg"
+                            onClick={handleDeleteSelected}
+                        >
+                            Delete
+                        </button>
+                    )}
+                </div>
             </div>
 
             {editingMetadata && (

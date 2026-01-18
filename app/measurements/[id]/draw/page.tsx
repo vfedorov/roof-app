@@ -7,6 +7,7 @@ import * as fabric from "fabric";
 import ShapeMetadataModal from "@/app/components/ShapeMetadataModal";
 import { SurfaceType } from "@/lib/measurements/types";
 import { calculatePolygonArea, outPolygonArea, syncVertexCircles } from "@/lib/measurements/shapes";
+import { createMagnifier } from "@/lib/measurements/magnifier";
 
 export default function DrawPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -42,6 +43,8 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
     const isLongPressActiveRef = useRef(false);
     const [isMagnifierActive, setIsMagnifierActive] = useState(false);
+    const isMagnifierActiveRef = useRef(false);
+    const magnifierRef = useRef<ReturnType<typeof createMagnifier> | null>(null);
     const [hasSelection, setHasSelection] = useState(false);
 
     const [editingMetadata, setEditingMetadata] = useState<{
@@ -63,6 +66,21 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     useEffect(() => {
         imageDimensionsRef.current = imageDimensions;
     }, [imageDimensions]);
+    useEffect(() => {
+        isMagnifierActiveRef.current = isMagnifierActive;
+        const canvas = fabricRef.current;
+        if (!canvas) return;
+
+        if (isMagnifierActive) {
+            canvas.selection = false;
+            canvas.defaultCursor = "crosshair";
+            canvas.discardActiveObject();
+            canvas.renderAll();
+        } else {
+            canvas.selection = true;
+            canvas.defaultCursor = "default";
+        }
+    }, [isMagnifierActive]);
 
     const applyTransformToPoints = (
         points: { x: number; y: number }[],
@@ -102,14 +120,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 return 0;
         }
     };
-
-    // ───────────────────────────────────────────────
-    // Magnify
-    // ───────────────────────────────────────────────
-    const Magnify = () => {
-        console.log("Let the Magnification begin!");
-    };
-
     // ───────────────────────────────────────────────
     // Handler for Metadata
     // ───────────────────────────────────────────────
@@ -155,9 +165,14 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             longPressTimerRef.current = null;
         }
         isLongPressActiveRef.current = false;
+        magnifierRef.current?.hide();
     };
 
     const handlePointerDown = (opt: fabric.TEvent) => {
+        if (isMagnifierActiveRef.current) {
+            opt.e?.preventDefault?.();
+            opt.e?.stopPropagation?.();
+        }
         if (!fabricRef.current || !opt.e) return;
 
         if (isLongPressActiveRef.current) return;
@@ -165,6 +180,10 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         const canvas = fabricRef.current;
         const pointer = canvas.getScenePoint(opt.e);
         const currentPoint = new fabric.Point(pointer.x, pointer.y);
+
+        if (isMagnifierActive && magnifierRef.current) {
+            magnifierRef.current.show(pointer.x, pointer.y);
+        }
 
         if ("ontouchstart" in window && opt.e instanceof TouchEvent) {
             if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
@@ -805,6 +824,14 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         canvas.on("mouse:down", handlePointerDown);
         canvas.on("mouse:up", handlePointerUpOrCancel);
         canvas.on("mouse:dblclick", handleDblClick);
+        canvas.on("mouse:move", (opt) => {
+            if (!isMagnifierActiveRef.current || !magnifierRef.current || !opt.e) return;
+
+            const pointer = canvas.getScenePoint(opt.e);
+            magnifierRef.current.show(pointer.x, pointer.y);
+        });
+
+        magnifierRef.current = createMagnifier(canvas, canvasWrapperRef.current!);
 
         const resizeAndScaleContent = () => {
             if (!canvasWrapperRef.current || !baseImageUrl) return;
@@ -966,6 +993,9 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
             window.removeEventListener("resize", resizeAndScaleContent);
             canvas.dispose();
+
+            magnifierRef.current?.destroy();
+            magnifierRef.current = null;
         };
     }, [baseImageUrl, scalePoints]);
     // ───────────────────────────────────────────────
@@ -1451,7 +1481,10 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     </button>
                     <button
                         onClick={() => {
-                            setIsMagnifierActive(!isMagnifierActive);
+                            setIsMagnifierActive((prev) => {
+                                console.log("---set is magnifier actinv: ", prev);
+                                return !prev;
+                            });
                         }}
                         className={`btn ${isMagnifierActive ? "btn-danger" : "btn-outline"}`}
                     >

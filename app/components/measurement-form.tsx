@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/supabase";
 import MeasurementImageManager from "@/app/components/measurement-image-manager";
+import { useToast } from "@/app/components/providers/toast-provider";
+import { useRouter } from "next/navigation";
 
 interface Property {
     id: string;
@@ -49,6 +51,8 @@ export default function MeasurementForm({
     action,
     measurement,
 }: MeasurementFormProps) {
+    const { toast } = useToast();
+    const router = useRouter();
     const [propertyId, setPropertyId] = useState<string>(() => {
         if (measurement?.property_id && typeof measurement.property_id === "string") {
             return measurement.property_id;
@@ -106,12 +110,57 @@ export default function MeasurementForm({
         fetchInspections();
     }, [propertyId]);
 
-    const handleSubmit = (formData: FormData) => {
-        void action(formData);
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        const formData = new FormData(e.target as HTMLFormElement);
+
+        const result = await action(formData);
+        if (!result?.ok) {
+            toast({ title: "Error", description: result?.message || "Failed to update session." });
+            return;
+        }
+
+        const measurementId = measurement?.id;
+        if (!measurementId) return;
+
+        const localShapes = localStorage.getItem(`measurement_shapes_${measurementId}`);
+        if (localShapes) {
+            try {
+                // clear the shapes
+                const shapesClearRes = await fetch(`/api/measurements/${measurementId}/shapes`, {
+                    method: "DELETE",
+                });
+
+                if (!shapesClearRes.ok) {
+                    throw new Error("Failed to clear shapes");
+                }
+            } catch (error) {
+                console.error(error);
+            }
+            try {
+                const res = await fetch(`/api/measurements/${measurementId}/shapes`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        shapes: JSON.parse(localShapes),
+                    }),
+                });
+                if (res.ok) {
+                    localStorage.removeItem(`measurement_shapes_${measurementId}`);
+                } else {
+                    toast({ title: "Warning", description: "Failed to sync shapes." });
+                }
+            } catch (e) {
+                console.error("Shape sync error:", e);
+            }
+        }
+        toast({ title: "Success", description: "Measurement saved successfully!" });
+        router.push(`/measurements/${measurementId}`);
     };
 
     return (
-        <form action={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
             {/* PROPERTY */}
             <div>
                 <label className="block mb-1 font-medium">Property</label>

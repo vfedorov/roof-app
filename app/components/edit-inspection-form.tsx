@@ -5,7 +5,8 @@ import { useServerAction } from "@/app/components/hooks/use-server-action";
 import { useToast } from "@/app/components/hooks/use-toast";
 import { updateInspection } from "@/app/inspections/actions";
 import { InspectionSections } from "@/app/components/inspection-sections";
-import { Inspection, Measurement, Property } from "@/lib/inspections/types";
+import { Inspection, Property } from "@/lib/inspections/types";
+import { Measurement } from "@/lib/measurements/types";
 import { RenderSection } from "@/lib/inspections/mapSectionsForRender";
 import Link from "next/link";
 

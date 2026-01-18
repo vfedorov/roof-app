@@ -1,9 +1,11 @@
 "use client";
-
+//Start to add points to each vertex of polygon
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/app/components/providers/toast-provider";
 import * as fabric from "fabric";
+import ShapeMetadataModal from "@/app/components/ShapeMetadataModal";
+import { SurfaceType } from "@/lib/measurements/types";
 
 export default function DrawPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -35,6 +37,17 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     const tempPolygonRef = useRef<fabric.Polygon | null>(null);
     const tempPolygonTextRef = useRef<fabric.IText | null>(null);
 
+    const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const isLongPressActiveRef = useRef(false);
+    const [isMagnifierActive, setIsMagnifierActive] = useState(false);
+
+    const [editingMetadata, setEditingMetadata] = useState<{
+        id: string;
+        label: string;
+        surface_type: SurfaceType;
+        waste_percentage: number;
+    } | null>(null);
+
     useEffect(() => {
         activeToolRef.current = activeTool;
     }, [activeTool]);
@@ -61,25 +74,104 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         });
     };
 
+    const openMetadataModal = (shape: fabric.Object) => {
+        const id = (shape as any).id;
+        if (!id || !fabricRef.current) return;
+        const label = (shape as any).label || "";
+        const surface_type =
+            (shape as any).surface_type || (shape.type === "line" ? "ridge" : "roof area");
+        const waste_percentage = (shape as any).waste_percentage ?? getDefaultWaste(surface_type);
+
+        setEditingMetadata({ id, label, surface_type, waste_percentage });
+    };
+
+    const getDefaultWaste = (type: string): number => {
+        switch (type) {
+            case "roof area":
+                return 10;
+            case "siding area":
+                return 15;
+            case "trim":
+            case "ridge":
+            case "eave":
+                return 15;
+            default:
+                return 0;
+        }
+    };
+
+    // ───────────────────────────────────────────────
+    // Magnify
+    // ───────────────────────────────────────────────
+    const Magnify = () => {
+        console.log("Let the Magnification begin!");
+    };
+
+    // ───────────────────────────────────────────────
+    // Handler for Metadata
+    // ───────────────────────────────────────────────
+    const handleMetadataSave = (data: {
+        label: string;
+        surface_type: SurfaceType;
+        waste_percentage: number;
+    }) => {
+        if (!editingMetadata?.id || !fabricRef.current) return;
+        const shape = fabricRef.current
+            .getObjects()
+            .find((obj) => (obj as any).id === editingMetadata.id);
+
+        if (!shape) {
+            toast({ title: "Error", description: "Shape not found." });
+            setEditingMetadata(null);
+            return;
+        }
+
+        (shape as any).label = data.label;
+        (shape as any).surface_type = data.surface_type;
+        (shape as any).waste_percentage = data.waste_percentage;
+
+        const textObj = (shape as any).associatedText;
+        if (textObj) {
+            textObj.set({ text: textObj.text || "" });
+            fabricRef.current.renderAll();
+        }
+
+        setEditingMetadata(null);
+        toast({ title: "Saved", description: "Shape metadata updated." });
+    };
+
+    const handleMetadataCancel = () => {
+        setEditingMetadata(null);
+    };
     // ───────────────────────────────────────────────
     // Handler for drawing lines
     // ───────────────────────────────────────────────
-    const handleMouseDown = (opt: fabric.TEvent) => {
+    const handlePointerUpOrCancel = () => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+        }
+        isLongPressActiveRef.current = false;
+    };
+
+    const handlePointerDown = (opt: fabric.TEvent) => {
         if (!fabricRef.current || !opt.e) return;
 
-        if (opt.e instanceof MouseEvent) {
-            if (opt.e.button === 2) {
-                if (activeToolRef.current === "polygon" && polygonPointsRef.current.length >= 3) {
-                    finalizePolygon();
-                }
-                opt.e.preventDefault();
-                return;
-            }
-        }
+        if (isLongPressActiveRef.current) return;
 
         const canvas = fabricRef.current;
         const pointer = canvas.getScenePoint(opt.e);
         const currentPoint = new fabric.Point(pointer.x, pointer.y);
+
+        if ("ontouchstart" in window && opt.e instanceof TouchEvent) {
+            if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = setTimeout(() => {
+                isLongPressActiveRef.current = true;
+                if (activeToolRef.current === "polygon" && polygonPointsRef.current.length >= 3) {
+                    finalizePolygon();
+                }
+            }, 500);
+        }
 
         // ───────────────────────────────────
         // LINE TOOL (two-click)
@@ -99,6 +191,8 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     strokeWidth: 2,
                     selectable: false,
                     evented: false,
+                });
+                tempCircle.set({
                     originX: "center",
                     originY: "center",
                 });
@@ -110,12 +204,14 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 const tempText = new fabric.IText("Click second point", {
                     fontSize: 12,
                     fill: "red",
-                    originX: "center",
-                    originY: "bottom",
                     selectable: false,
                     evented: false,
                     left: currentPoint.x,
                     top: currentPoint.y - 10,
+                });
+                tempText.set({
+                    originX: "center",
+                    originY: "bottom",
                 });
                 (tempText as any).isTemp = true;
                 tempTextRef.current = tempText;
@@ -147,8 +243,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             const line = new fabric.Line([0, 0, length, 0], {
                 left: startPoint.x,
                 top: startPoint.y,
-                originX: "left",
-                originY: "center",
                 angle: angle,
                 stroke: "red",
                 strokeWidth: 4,
@@ -156,10 +250,15 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 selectable: true,
                 hasBorders: true,
                 cornerColor: "red",
-                cornerStyle: "circle",
                 cornerStrokeColor: "red",
                 transparentCorners: true,
             });
+            line.set({
+                originX: "left",
+                originY: "center",
+                cornerStyle: "circle",
+            });
+            (line as any).id = crypto.randomUUID();
 
             ["tl", "tr", "bl", "br", "mt", "mb"].forEach((key) => {
                 line.setControlVisible(key, false);
@@ -168,13 +267,39 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             const text = new fabric.IText("0.00 ft", {
                 fontSize: 14,
                 fill: "red",
-                originX: "center",
-                originY: "bottom",
                 selectable: false,
                 evented: false,
             });
+            text.set({
+                originX: "center",
+                originY: "bottom",
+            });
+
+            // const label_ = new fabric.IText("", {
+            //     fontSize: 14,
+            //     fill: "red",
+            //     selectable: false,
+            //     evented: false,
+            // });
+            // label_.set({
+            //     originX: "center",
+            //     originY: "bottom",
+            // });
+            //
+            // const type_ = new fabric.IText("", {
+            //     fontSize: 14,
+            //     fill: "red",
+            //     selectable: false,
+            //     evented: false,
+            // });
+            // type_.set({
+            //     originX: "center",
+            //     originY: "bottom",
+            // });
 
             (line as any).associatedText = text;
+            // (line as any).associatedLabel = label_;
+            // (line as any).associatedType = type_;
 
             // Calculate Scale
             const scaleLinePx = Math.sqrt(
@@ -186,7 +311,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             const updateText = () => {
                 const coords = line.getCoords();
                 const finalP1 = coords[0];
-                const finalP2 = coords[2];
+                const finalP2 = coords[1];
 
                 // Calculating the length in feet
                 if (
@@ -198,6 +323,13 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     return;
                 }
 
+                // if ((line as any).label) {
+                //     label_.set({ text: (line as any).label });
+                // }
+                //
+                // if ((line as any).surface_type) {
+                //     type_.set({ text: (line as any).surface_type });
+                // }
                 const currentLinePx = finalP2.distanceFrom(finalP1);
                 const displayedWidth = canvas.getWidth();
                 const scaleRatio = imageDimensionsRef.current.naturalWidth / displayedWidth;
@@ -211,6 +343,14 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     top: lineCenterY,
                     text: `${lengthFt.toFixed(2)} ft`,
                 });
+                // label_.set({
+                //     left: lineCenterX,
+                //     top: lineCenterY - 30,
+                // });
+                // type_.set({
+                //     left: lineCenterX,
+                //     top: lineCenterY - 15,
+                // });
             };
 
             // Events
@@ -218,7 +358,8 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             line.on("scaling", updateText);
             line.on("modified", updateText);
 
-            canvas.add(line, text);
+            canvas.add(line, text); //, label_, type_);
+            // openMetadataModal(line);
             canvas.setActiveObject(line);
             updateText();
             return;
@@ -243,6 +384,8 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     strokeWidth: 2,
                     selectable: false,
                     evented: false,
+                });
+                startCircle.set({
                     originX: "center",
                     originY: "center",
                 });
@@ -279,15 +422,17 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 // Calculating the area for a temporary polygon
                 // const areaSqFt = calculatePolygonArea(polygonPointsRef.current);
                 const areaSqFt = calculatePolygonArea(tempPolygon);
-                const tempText = new fabric.IText(`${areaSqFt.toFixed(2)} sq ft`, {
+                const tempText = new fabric.IText(`${outPolygonArea(areaSqFt)}`, {
                     fontSize: 14,
                     fill: "red",
-                    originX: "center",
-                    originY: "bottom",
                     selectable: false,
                     evented: false,
                     left: currentPoint.x,
                     top: currentPoint.y - 10,
+                });
+                tempText.set({
+                    originX: "center",
+                    originY: "bottom",
                 });
                 (tempText as any).isTemp = true;
                 tempPolygonTextRef.current = tempText;
@@ -301,8 +446,8 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
     // Double-click (complete polygon creation)
     const handleDblClick = (opt: fabric.TEvent) => {
+        if (isLongPressActiveRef.current) return;
         if (activeToolRef.current !== "polygon" || polygonPointsRef.current.length <= 3) return;
-
         finalizePolygon();
     };
 
@@ -343,10 +488,10 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             originY: "top",
             cornerStyle: "circle",
         });
+        (finalPolygon as any).id = crypto.randomUUID();
 
-        //const areaSqFt = calculatePolygonArea(polygonPointsRef.current);
         const areaSqFt = calculatePolygonArea(finalPolygon);
-        const text = new fabric.IText(`${areaSqFt.toFixed(2)} sq ft`, {
+        const text = new fabric.IText(`${outPolygonArea(areaSqFt)}`, {
             fontSize: 14,
             fill: "red",
             selectable: false,
@@ -357,29 +502,115 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             originY: "bottom",
         });
 
+        // const label_ = new fabric.IText("", {
+        //     fontSize: 14,
+        //     fill: "red",
+        //     selectable: false,
+        //     evented: false,
+        // });
+        // label_.set({
+        //     originX: "center",
+        //     originY: "bottom",
+        // });
+        //
+        // const type_ = new fabric.IText("", {
+        //     fontSize: 14,
+        //     fill: "red",
+        //     selectable: false,
+        //     evented: false,
+        // });
+        // type_.set({
+        //     originX: "center",
+        //     originY: "bottom",
+        // });
+
         (finalPolygon as any).associatedText = text;
-        // (text as any).associatedShape = finalPolygon;
+        // (finalPolygon as any).associatedLabel = label_;
+        // (finalPolygon as any).associatedType = type_;
 
         const center = finalPolygon.getCenterPoint();
         text.set({ left: center.x, top: center.y });
+        // label_.set({ left: center.x, top: center.y - 30 });
+        // type_.set({ left: center.x, top: center.y - 15 });
 
         const updatePolygonText = () => {
-            // const newArea = calculatePolygonArea(finalPolygon.points);
             const newArea = calculatePolygonArea(finalPolygon);
             const newCenter = finalPolygon.getCenterPoint();
             text.set({
-                text: `${newArea.toFixed(2)} sq ft`,
+                text: `${outPolygonArea(newArea)}`,
                 left: newCenter.x,
                 top: newCenter.y,
             });
+            // label_.set({
+            //     left: newCenter.x,
+            //     top: newCenter.y - 30,
+            // });
+            // type_.set({
+            //     left: newCenter.x,
+            //     top: newCenter.y - 15,
+            // });
             canvas.renderAll();
         };
+        (finalPolygon as any).updateTextFn = updatePolygonText;
 
         finalPolygon.on("moving", updatePolygonText);
         finalPolygon.on("scaling", updatePolygonText);
         finalPolygon.on("modified", updatePolygonText);
 
-        canvas.add(finalPolygon, text);
+        canvas.add(finalPolygon, text); // , label_, type_);
+        const vertexCircles: fabric.Circle[] = [];
+
+        finalPolygon.points.forEach((point, idx) => {
+            const circle = new fabric.Circle({
+                left: point.x,
+                top: point.y,
+                radius: 6,
+                fill: "white",
+                stroke: "red",
+                strokeWidth: 2,
+                selectable: true,
+                hasControls: false,
+                hoverCursor: "pointer",
+            });
+            circle.set({
+                originX: "center",
+                originY: "center",
+            });
+
+            // Связываем точку с полигоном и индексом
+            (circle as any).belongsTo = finalPolygon;
+            (circle as any).vertexIndex = idx;
+
+            vertexCircles.push(circle);
+            circle.on("moving", () => {
+                const poly = (circle as any).belongsTo as fabric.Polygon;
+                const idx = (circle as any).vertexIndex as number;
+
+                if (!poly || idx === undefined) return;
+
+                // Получаем новую позицию точки
+                const newX = circle.left! + circle.radius! / 2;
+                const newY = circle.top! + circle.radius! / 2;
+
+                // Обновляем точку в массиве
+                poly.points[idx].x = newX;
+                poly.points[idx].y = newY;
+
+                // Перерисовываем полигон
+                poly.set({ dirty: true });
+                canvas.renderAll();
+
+                // Обновляем текст (площадь)
+                const updateFn = (poly as any).updateTextFn; // см. шаг 3
+                if (updateFn) updateFn();
+            });
+            canvas.add(circle);
+        });
+
+        // Сохраняем ссылки на точки внутри полигона
+        (finalPolygon as any).vertexCircles = vertexCircles;
+
+        // openMetadataModal(finalPolygon);
         canvas.setActiveObject(finalPolygon);
         polygonPointsRef.current = [];
         canvas.renderAll();
@@ -400,9 +631,19 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             if ((obj as any).associatedText) {
                 canvas.remove((obj as any).associatedText);
             }
+            if ((obj as any).associatedLabel) {
+                canvas.remove((obj as any).associatedLabel);
+            }
             canvas.remove(obj);
         });
 
+        activeObjects.forEach((obj) => {
+            if ((obj as any).associatedText) canvas.remove((obj as any).associatedText);
+            if ((obj as any).vertexCircles) {
+                (obj as any).vertexCircles.forEach((c: fabric.Object) => canvas.remove(c));
+            }
+            canvas.remove(obj);
+        });
         // Removing the selection
         canvas.discardActiveObject();
         canvas.renderAll();
@@ -457,20 +698,27 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         return areaSqFt;
     };
 
+    const outPolygonArea = (polygonArea: number): string => {
+        let outArea = "";
+        if (polygonArea > 100) {
+            outArea = (polygonArea / 100).toFixed(2).toString() + " square";
+        } else {
+            outArea = polygonArea.toFixed(2).toString() + " sq ft";
+        }
+        return outArea;
+    };
     // ───────────────────────────────────────────────
     // Saving shape data
     // ───────────────────────────────────────────────
-    const handleSaveShapes = async () => {
-        if (!fabricRef.current || !measurementId) {
-            toast({ title: "Error", description: "No measurement ID or canvas available." });
-            return;
-        }
+    const saveShapesLocally = () => {
+        if (!fabricRef.current || !measurementId) return;
 
         const canvas = fabricRef.current;
         const naturalWidth = imageDimensions.naturalWidth;
         const naturalHeight = imageDimensions.naturalHeight;
         const canvasWidth = canvas.getWidth();
         const canvasHeight = canvas.getHeight();
+
         const objects = canvas
             .getObjects()
             .filter(
@@ -480,79 +728,58 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         const shapesToSave = objects.map((obj) => {
             let points: { x: number; y: number }[] = [];
             const shapeType = obj.type === "line" ? "line" : "polygon";
-            const label = (obj as any).associatedText?.text || "";
-            const wastePercentage = 0;
+            const label = (obj as any).label || "";
+            const surfaceType = (obj as any).surface_type || "custom";
+            const wastePercentage = (obj as any).waste_percentage ?? 0;
+
             if (obj.type === "line") {
                 const coords = obj.getCoords();
                 points = [
                     {
-                        x: (coords[0].x / canvasWidth) * naturalWidth,
-                        y: (coords[0].y / canvasHeight) * naturalHeight,
+                        x: ((coords[0].x - obj.strokeWidth / 2) / canvasWidth) * naturalWidth,
+                        y: ((coords[0].y + obj.strokeWidth / 2) / canvasHeight) * naturalHeight,
                     },
                     {
-                        x: (coords[2].x / canvasWidth) * naturalWidth,
-                        y: (coords[2].y / canvasHeight) * naturalHeight,
+                        x: ((coords[1].x - obj.strokeWidth / 2) / canvasWidth) * naturalWidth,
+                        y: ((coords[1].y + obj.strokeWidth / 2) / canvasHeight) * naturalHeight,
                     },
                 ];
-                console.log("Line points: ", points);
             } else if (obj.type === "polygon") {
                 const poly = obj as fabric.Polygon;
                 const matrix = poly.calcTransformMatrix();
-
                 const globalPoints = poly.points.map((point) => {
                     const transformed = new fabric.Point(point.x, point.y).transform(matrix);
                     return new fabric.Point(
-                        transformed.x - poly.pathOffset.x * poly.scaleX, // + poly.left + pathOffset.x,
-                        transformed.y - poly.pathOffset.y * poly.scaleY, // + poly.top + pathOffset.y,
+                        transformed.x - poly.pathOffset.x * poly.scaleX,
+                        transformed.y - poly.pathOffset.y * poly.scaleY,
                     );
                 });
-
                 points = globalPoints.map((pt) => ({
                     x: (pt.x / canvasWidth) * naturalWidth,
                     y: (pt.y / canvasHeight) * naturalHeight,
                 }));
-                console.log("Poly points: ", points);
             }
 
             return {
                 measurement_session_id: measurementId,
                 shape_type: shapeType,
-                label: label,
-                type: "custom",
+                label,
+                surface_type: surfaceType,
                 waste_percentage: wastePercentage,
-                points: points,
+                points,
+                id: (obj as any).id,
             };
         });
 
+        // Save to the localStorage
         try {
-            // clear the shapes
-            const shapesClearRes = await fetch(`/api/measurements/${measurementId}/shapes`, {
-                method: "DELETE",
-            });
-
-            if (!shapesClearRes.ok) {
-                throw new Error("Failed to clear shapes");
-            }
-
-            // toast({ title: "Success", description: "Shapes cleared successfully!" });
-        } catch (error) {
-            // toast({ title: "Error", description: "Failed to clear shapes." });
-            console.error(error);
-        }
-
-        try {
-            const res = await fetch(`/api/measurements/${measurementId}/shapes`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ shapes: shapesToSave }),
-            });
-
-            if (!res.ok) throw new Error("Failed to save shapes");
-
-            toast({ title: "Success", description: "Shapes saved successfully!" });
-        } catch (error) {
-            toast({ title: "Error", description: "Failed to save shapes." });
-            console.error(error);
+            localStorage.setItem(
+                `measurement_shapes_${measurementId}`,
+                JSON.stringify(shapesToSave),
+            );
+            toast({ title: "Draft saved", description: "Shapes cached locally." });
+        } catch (e) {
+            toast({ title: "Warning", description: "Failed to cache shapes." });
         }
     };
     // ───────────────────────────────────────────────
@@ -581,37 +808,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     // ───────────────────────────────────────────────
     // Initializing Fabric.js canvas
     // ───────────────────────────────────────────────
-    // useEffect(() => {
-    //     if (!canvasRef.current) return;
-    //
-    //     const canvas = new fabric.Canvas(canvasRef.current, {
-    //         preserveObjectStacking: true,
-    //         selection: true,
-    //         backgroundColor: "transparent",
-    //     });
-    //     fabricRef.current = canvas;
-    //
-    //     canvas.on("mouse:down", handleMouseDown);
-    //     canvas.on("mouse:dblclick", handleDblClick);
-    //
-    //     const resizeCanvas = () => {
-    //         if (!canvasWrapperRef.current) return;
-    //         const width = canvasWrapperRef.current.clientWidth;
-    //         const height = canvasWrapperRef.current.clientHeight;
-    //         canvas.setDimensions({ width, height });
-    //     };
-    //
-    //     resizeCanvas();
-    //     window.addEventListener("resize", resizeCanvas);
-    //
-    //     return () => {
-    //         canvas.off("mouse:down", handleMouseDown);
-    //         canvas.off("mouse:dblclick", handleDblClick);
-    //         window.removeEventListener("resize", resizeCanvas);
-    //         canvas.dispose();
-    //     };
-    // }, []);
-
     useEffect(() => {
         if (!canvasRef.current) return;
 
@@ -622,7 +818,8 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         });
         fabricRef.current = canvas;
 
-        canvas.on("mouse:down", handleMouseDown);
+        canvas.on("mouse:down", handlePointerDown);
+        canvas.on("mouse:up", handlePointerUpOrCancel);
         canvas.on("mouse:dblclick", handleDblClick);
 
         const resizeAndScaleContent = () => {
@@ -724,7 +921,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 //     if (shape.type === "line") {
                 //         const coords = shape.getCoords();
                 //         const p1 = { x: coords[0].x, y: coords[0].y };
-                //         const p2 = { x: coords[2].x, y: coords[2].y };
+                //         const p2 = { x: coords[1].x, y: coords[1].y };
                 //
                 //         // Пересчёт координат относительно нового масштаба
                 //         const newP1 = {
@@ -779,8 +976,10 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         window.addEventListener("resize", resizeAndScaleContent);
 
         return () => {
-            canvas.off("mouse:down", handleMouseDown);
+            canvas.off("mouse:down", handlePointerDown);
+            canvas.off("mouse:up", handlePointerUpOrCancel);
             canvas.off("mouse:dblclick", handleDblClick);
+
             window.removeEventListener("resize", resizeAndScaleContent);
             canvas.dispose();
         };
@@ -909,168 +1108,318 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         )
             return;
         const loadShapes = async () => {
+            let shapesToRender: any[] = [];
+
             try {
-                const res = await fetch(`/api/measurements/${measurementId}/shapes`);
-                const data = await res.json();
-                if (!data.shapes || !Array.isArray(data.shapes)) return;
-
-                const canvas = fabricRef.current!;
-                const naturalWidth = imageDimensions.naturalWidth;
-                const naturalHeight = imageDimensions.naturalHeight;
-                const canvasWidth = canvas.getWidth();
-                const canvasHeight = canvas.getHeight();
-
-                data.shapes.forEach((shape: any) => {
-                    const points = shape.points.map((p: any) => ({
-                        x: (p.x / naturalWidth) * canvasWidth,
-                        y: (p.y / naturalHeight) * canvasHeight,
-                    }));
-                    if (shape.shape_type === "line") {
-                        const [p1, p2] = points;
-                        const dx = p2.x - p1.x;
-                        const dy = p2.y - p1.y;
-                        const length = Math.sqrt(dx * dx + dy * dy);
-                        const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-
-                        const line = new fabric.Line([0, 0, length, 0], {
-                            left: p1.x,
-                            top: p1.y,
-                            angle: angle,
-                            stroke: "red",
-                            strokeWidth: 4,
-                            selectable: true,
-                            hasBorders: true,
-                            cornerColor: "red",
-                            cornerStrokeColor: "red",
-                            transparentCorners: true,
-                        });
-                        line.set({
-                            originX: "left",
-                            originY: "center",
-                            cornerStyle: "circle",
-                        });
-
-                        ["tl", "tr", "bl", "br", "mt", "mb"].forEach((key) => {
-                            line.setControlVisible(key, false);
-                        });
-
-                        const text = new fabric.IText(shape.label || "0.00 ft", {
-                            fontSize: 14,
-                            fill: "red",
-                            selectable: false,
-                            evented: false,
-                        });
-                        text.set({
-                            originX: "center",
-                            originY: "bottom",
-                        });
-
-                        (line as any).associatedText = text;
-
-                        const updateText = () => {
-                            const coords = line.getCoords();
-                            const finalP1 = coords[0];
-                            const finalP2 = coords[2];
-
-                            if (
-                                scaleRef.current === null ||
-                                scalePointsRef.current.length !== 2 ||
-                                imageDimensionsRef.current.naturalWidth === 0
-                            ) {
-                                text.set({ text: "–" });
-                                return;
-                            }
-
-                            const currentLinePx = finalP2.distanceFrom(finalP1);
-                            const displayedWidth = canvas.getWidth();
-                            const scaleRatio =
-                                imageDimensionsRef.current.naturalWidth / displayedWidth;
-                            const currentLinePxNatural = currentLinePx * scaleRatio;
-                            const scaleLinePx = Math.sqrt(
-                                Math.pow(
-                                    scalePointsRef.current[1].x - scalePointsRef.current[0].x,
-                                    2,
-                                ) +
-                                    Math.pow(
-                                        scalePointsRef.current[1].y - scalePointsRef.current[0].y,
-                                        2,
-                                    ),
-                            );
-                            const lengthFt =
-                                (currentLinePxNatural / scaleLinePx) * scaleRef.current;
-
-                            const lineCenterX = (finalP1.x + finalP2.x) / 2 - 25;
-                            const lineCenterY = (finalP1.y + finalP2.y) / 2 - 10;
-                            text.set({
-                                left: lineCenterX,
-                                top: lineCenterY,
-                                text: `${lengthFt.toFixed(2)} ft`,
-                            });
-                        };
-
-                        line.on("moving", updateText);
-                        line.on("scaling", updateText);
-                        line.on("modified", updateText);
-
-                        canvas.add(line, text);
-                        updateText();
-                    } else if (shape.shape_type === "polygon") {
-                        const polygon = new fabric.Polygon(points, {
-                            fill: "rgba(255, 0, 0, 0.2)",
-                            stroke: "red",
-                            strokeWidth: 3,
-                            selectable: true,
-                            hasControls: true,
-                            strokeUniform: true,
-                            cornerColor: "red",
-                            cornerStrokeColor: "red",
-                            transparentCorners: true,
-                        });
-                        polygon.set({
-                            originX: "left",
-                            originY: "top",
-                            cornerStyle: "circle",
-                        });
-
-                        const text = new fabric.IText(shape.label || "0.00 sq ft", {
-                            fontSize: 14,
-                            fill: "red",
-                            selectable: false,
-                            evented: false,
-                        });
-                        text.set({
-                            originX: "center",
-                            originY: "bottom",
-                        });
-
-                        (polygon as any).associatedText = text;
-
-                        const center = polygon.getCenterPoint();
-                        text.set({ left: center.x, top: center.y });
-
-                        const updatePolygonText = () => {
-                            const newArea = calculatePolygonArea(polygon);
-                            const newCenter = polygon.getCenterPoint();
-                            text.set({
-                                text: `${newArea.toFixed(2)} sq ft`,
-                                left: newCenter.x,
-                                top: newCenter.y,
-                            });
-                            canvas.renderAll();
-                        };
-
-                        polygon.on("moving", updatePolygonText);
-                        polygon.on("scaling", updatePolygonText);
-                        polygon.on("modified", updatePolygonText);
-
-                        canvas.add(polygon, text);
-                    }
-                });
-
-                canvas.renderAll();
-            } catch (error) {
-                console.error("Error loading shapes:", error);
+                const localData = localStorage.getItem(`measurement_shapes_${measurementId}`);
+                if (localData) {
+                    shapesToRender = JSON.parse(localData);
+                }
+            } catch (e) {
+                console.warn("Failed to parse local shapes");
             }
+
+            if (shapesToRender.length === 0) {
+                try {
+                    const res = await fetch(`/api/measurements/${measurementId}/shapes`);
+                    const data = await res.json();
+                    if (data.shapes?.length > 0) {
+                        shapesToRender = data.shapes;
+                        localStorage.setItem(
+                            `measurement_shapes_${measurementId}`,
+                            JSON.stringify(data.shapes),
+                        );
+                    }
+                } catch (error) {
+                    console.warn("Failed to load shapes from server");
+                }
+            }
+
+            if (shapesToRender.length === 0) return;
+
+            const res = await fetch(`/api/measurements/${measurementId}/shapes`);
+            const data = await res.json();
+            if (!data.shapes || !Array.isArray(data.shapes)) return;
+
+            const canvas = fabricRef.current!;
+            const naturalWidth = imageDimensions.naturalWidth;
+            const naturalHeight = imageDimensions.naturalHeight;
+            const canvasWidth = canvas.getWidth();
+            const canvasHeight = canvas.getHeight();
+
+            shapesToRender.forEach((shape: any) => {
+                const points = shape.points.map((p: any) => ({
+                    x: (p.x / naturalWidth) * canvasWidth,
+                    y: (p.y / naturalHeight) * canvasHeight,
+                }));
+                if (shape.shape_type === "line") {
+                    const [p1, p2] = points;
+                    const dx = p2.x - p1.x;
+                    const dy = p2.y - p1.y;
+                    const length = Math.sqrt(dx * dx + dy * dy);
+                    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+                    const line = new fabric.Line([0, 0, length, 0], {
+                        left: p1.x,
+                        top: p1.y,
+                        angle: angle,
+                        stroke: "red",
+                        strokeWidth: 4,
+                        selectable: true,
+                        hasBorders: true,
+                        cornerColor: "red",
+                        cornerStrokeColor: "red",
+                        transparentCorners: true,
+                    });
+                    line.set({
+                        originX: "left",
+                        originY: "center",
+                        cornerStyle: "circle",
+                    });
+                    (line as any).id = shape.id || crypto.randomUUID();
+
+                    ["tl", "tr", "bl", "br", "mt", "mb"].forEach((key) => {
+                        line.setControlVisible(key, false);
+                    });
+
+                    const text = new fabric.IText(shape.label || "0.00 ft", {
+                        fontSize: 14,
+                        fill: "red",
+                        selectable: false,
+                        evented: false,
+                    });
+                    text.set({
+                        originX: "center",
+                        originY: "bottom",
+                    });
+
+                    // const label_ = new fabric.IText(shape.label || "", {
+                    //     fontSize: 14,
+                    //     fill: "red",
+                    //     selectable: false,
+                    //     evented: false,
+                    // });
+                    // label_.set({
+                    //     originX: "center",
+                    //     originY: "bottom",
+                    // });
+                    //
+                    // const type_ = new fabric.IText(shape.surface_type || "", {
+                    //     fontSize: 14,
+                    //     fill: "red",
+                    //     selectable: false,
+                    //     evented: false,
+                    // });
+                    // type_.set({
+                    //     originX: "center",
+                    //     originY: "bottom",
+                    // });
+
+                    (line as any).associatedText = text;
+                    // (line as any).associatedLabel = label_;
+                    // (line as any).associatedType = type_;
+
+                    const updateText = () => {
+                        const coords = line.getCoords();
+                        const finalP1 = coords[0];
+                        const finalP2 = coords[1];
+
+                        if (
+                            scaleRef.current === null ||
+                            scalePointsRef.current.length !== 2 ||
+                            imageDimensionsRef.current.naturalWidth === 0
+                        ) {
+                            text.set({ text: "–" });
+                            return;
+                        }
+
+                        // if ((line as any).label) {
+                        //     label_.set({ text: (line as any).label });
+                        // }
+                        //
+                        // if ((line as any).surface_type) {
+                        //     type_.set({ text: (line as any).surface_type });
+                        // }
+                        const currentLinePx = finalP2.distanceFrom(finalP1);
+                        const displayedWidth = canvas.getWidth();
+                        const scaleRatio = imageDimensionsRef.current.naturalWidth / displayedWidth;
+                        const currentLinePxNatural = currentLinePx * scaleRatio;
+                        const scaleLinePx = Math.sqrt(
+                            Math.pow(scalePointsRef.current[1].x - scalePointsRef.current[0].x, 2) +
+                                Math.pow(
+                                    scalePointsRef.current[1].y - scalePointsRef.current[0].y,
+                                    2,
+                                ),
+                        );
+                        const lengthFt = (currentLinePxNatural / scaleLinePx) * scaleRef.current;
+
+                        const lineCenterX = (finalP1.x + finalP2.x) / 2 - 25;
+                        const lineCenterY = (finalP1.y + finalP2.y) / 2 - 10;
+                        text.set({
+                            left: lineCenterX,
+                            top: lineCenterY,
+                            text: `${lengthFt.toFixed(2)} ft`,
+                        });
+                        // label_.set({
+                        //     left: lineCenterX,
+                        //     top: lineCenterY - 30,
+                        // });
+                        // type_.set({
+                        //     left: lineCenterX,
+                        //     top: lineCenterY - 15,
+                        // });
+                    };
+
+                    line.on("moving", updateText);
+                    line.on("scaling", updateText);
+                    line.on("modified", updateText);
+
+                    canvas.add(line, text); // , label_, type_);
+                    updateText();
+                } else if (shape.shape_type === "polygon") {
+                    const polygon = new fabric.Polygon(points, {
+                        fill: "rgba(255, 0, 0, 0.2)",
+                        stroke: "red",
+                        strokeWidth: 3,
+                        selectable: true,
+                        hasControls: true,
+                        strokeUniform: true,
+                        cornerColor: "red",
+                        cornerStrokeColor: "red",
+                        transparentCorners: true,
+                    });
+                    polygon.set({
+                        originX: "left",
+                        originY: "top",
+                        cornerStyle: "circle",
+                    });
+                    (polygon as any).id = shape.id || crypto.randomUUID();
+
+                    const text = new fabric.IText(shape.label || "0.00 sq ft", {
+                        fontSize: 14,
+                        fill: "red",
+                        selectable: false,
+                        evented: false,
+                    });
+                    text.set({
+                        originX: "center",
+                        originY: "bottom",
+                    });
+
+                    // const label_ = new fabric.IText(shape.label || "", {
+                    //     fontSize: 14,
+                    //     fill: "red",
+                    //     selectable: false,
+                    //     evented: false,
+                    // });
+                    // label_.set({
+                    //     originX: "center",
+                    //     originY: "bottom",
+                    // });
+                    //
+                    // const type_ = new fabric.IText(shape.surface_type || "", {
+                    //     fontSize: 14,
+                    //     fill: "red",
+                    //     selectable: false,
+                    //     evented: false,
+                    // });
+                    // type_.set({
+                    //     originX: "center",
+                    //     originY: "bottom",
+                    // });
+
+                    (polygon as any).associatedText = text;
+                    // (polygon as any).associatedLabel = label_;
+                    // (polygon as any).associatedType = type_;
+
+                    const center = polygon.getCenterPoint();
+                    text.set({ left: center.x, top: center.y });
+                    // label_.set({ left: center.x, top: center.y - 30 });
+                    // type_.set({ left: center.x, top: center.y - 15 });
+
+                    const updatePolygonText = () => {
+                        const newArea = calculatePolygonArea(polygon);
+                        const newCenter = polygon.getCenterPoint();
+                        text.set({
+                            text: `${outPolygonArea(newArea)}`,
+                            left: newCenter.x,
+                            top: newCenter.y,
+                        });
+                        // label_.set({
+                        //     left: newCenter.x,
+                        //     top: newCenter.y - 30,
+                        // });
+                        // type_.set({
+                        //     left: newCenter.x,
+                        //     top: newCenter.y - 15,
+                        // });
+                        canvas.renderAll();
+                    };
+
+                    (polygon as any).updateTextFn = updatePolygonText;
+
+                    polygon.on("moving", updatePolygonText);
+                    polygon.on("scaling", updatePolygonText);
+                    polygon.on("modified", updatePolygonText);
+
+                    canvas.add(polygon, text); //, label_, type_);
+                    updatePolygonText();
+
+                    const vertexCircles: fabric.Circle[] = [];
+
+                    polygon.points.forEach((point, idx) => {
+                        const circle = new fabric.Circle({
+                            left: point.x,
+                            top: point.y,
+                            radius: 6,
+                            fill: "white",
+                            stroke: "red",
+                            strokeWidth: 2,
+                            selectable: true,
+                            hasControls: false,
+                            hoverCursor: "pointer",
+                        });
+                        circle.set({
+                            originX: "center",
+                            originY: "center",
+                        });
+
+                        // Связываем точку с полигоном и индексом
+                        (circle as any).belongsTo = polygon;
+                        (circle as any).vertexIndex = idx;
+
+                        vertexCircles.push(circle);
+                        circle.on("moving", () => {
+                            const poly = (circle as any).belongsTo as fabric.Polygon;
+                            const idx = (circle as any).vertexIndex as number;
+
+                            if (!poly || idx === undefined) return;
+
+                            // Получаем новую позицию точки
+                            const newX = circle.left! + circle.radius! / 2;
+                            const newY = circle.top! + circle.radius! / 2;
+
+                            // Обновляем точку в массиве
+                            poly.points[idx].x = newX;
+                            poly.points[idx].y = newY;
+
+                            // Перерисовываем полигон
+                            poly.set({ dirty: true });
+                            canvas.renderAll();
+
+                            // Обновляем текст (площадь)
+                            const updateFn = (poly as any).updateTextFn;
+                            if (updateFn) updateFn();
+                        });
+                        canvas.add(circle);
+                    });
+
+                    // Сохраняем ссылки на точки внутри полигона
+                    (polygon as any).vertexCircles = vertexCircles;
+                }
+            });
+
+            canvas.renderAll();
         };
 
         loadShapes();
@@ -1081,6 +1430,11 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         imageDimensions.naturalWidth,
         imageDimensions.naturalHeight,
     ]);
+
+    const handleBackAndSave = () => {
+        // saveShapesLocally();
+        router.back();
+    };
     // ───────────────────────────────────────────────
     // UI
     // ───────────────────────────────────────────────
@@ -1088,12 +1442,47 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         <div className="p-4 space-y-4">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <button onClick={() => router.back()} className="btn">
+                    <button onClick={handleBackAndSave} className="btn btn-outline">
                         ← Back
                     </button>
-                    <button type="button" className="btn btn-success" onClick={handleSaveShapes}>
-                        Save Shapes
+                    <button onClick={saveShapesLocally} className="btn btn-outline">
+                        Save shapes
                     </button>
+                    <button
+                        onClick={() => {
+                            setIsMagnifierActive(!isMagnifierActive);
+                        }}
+                        className={`btn ${isMagnifierActive ? "btn-danger" : "btn-outline"}`}
+                    >
+                        🔍 Magnify
+                    </button>
+                    {/*<button*/}
+                    {/*    type="button"*/}
+                    {/*    className="btn btn-outline"*/}
+                    {/*    onClick={() => {*/}
+                    {/*        const canvas = fabricRef.current;*/}
+                    {/*        if (!canvas) return;*/}
+                    {/*        const activeObjects = canvas.getActiveObjects();*/}
+                    {/*        if (activeObjects.length !== 1) {*/}
+                    {/*            toast({*/}
+                    {/*                title: "Select one shape",*/}
+                    {/*                description: "Please select exactly one line or polygon.",*/}
+                    {/*            });*/}
+                    {/*            return;*/}
+                    {/*        }*/}
+                    {/*        const obj = activeObjects[0];*/}
+                    {/*        if (obj.type !== "line" && obj.type !== "polygon") {*/}
+                    {/*            toast({*/}
+                    {/*                title: "Invalid selection",*/}
+                    {/*                description: "Only lines and polygons can have metadata.",*/}
+                    {/*            });*/}
+                    {/*            return;*/}
+                    {/*        }*/}
+                    {/*        // openMetadataModal(obj);*/}
+                    {/*    }}*/}
+                    {/*>*/}
+                    {/*    Edit Metadata*/}
+                    {/*</button>*/}
                 </div>
 
                 {scale !== null && (
@@ -1157,6 +1546,19 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             <div ref={canvasWrapperRef} className="border shadow-md w-full h-[70vh]">
                 <canvas ref={canvasRef} />
             </div>
+
+            {editingMetadata && (
+                <ShapeMetadataModal
+                    isOpen={true}
+                    initialData={{
+                        label: editingMetadata.label,
+                        surface_type: editingMetadata.surface_type,
+                        waste_percentage: editingMetadata.waste_percentage,
+                    }}
+                    onSave={handleMetadataSave}
+                    onCancel={handleMetadataCancel}
+                />
+            )}
         </div>
     );
 }

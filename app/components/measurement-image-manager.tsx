@@ -105,10 +105,28 @@ export default function MeasurementImageManager({
                     setScalePoints(sessionData.scale_points || []);
                 }
 
-                const shapesRes = await fetch(`/api/measurements/${measurementId}/shapes`);
-                if (!cancelled) {
-                    const shapesData = await shapesRes.json();
-                    setShapes(shapesData.shapes || []);
+                try {
+                    const localData = localStorage.getItem(`measurement_shapes_${measurementId}`);
+                    if (localData && allowUpload) {
+                        const shapesFromLocal = JSON.parse(localData);
+                        setShapes(shapesFromLocal);
+                    } else {
+                        const shapesRes = await fetch(`/api/measurements/${measurementId}/shapes`);
+
+                        if (!cancelled) {
+                            const shapesData = await shapesRes.json();
+                            const shapes = shapesData.shapes || [];
+
+                            localStorage.setItem(
+                                `measurement_shapes_${measurementId}`,
+                                JSON.stringify(shapes),
+                            );
+                            setShapes(shapes);
+                        }
+                    }
+                } catch (error) {
+                    console.warn("Failed to load shapes:", error);
+                    setShapes([]);
                 }
             }
         })();
@@ -224,6 +242,7 @@ export default function MeasurementImageManager({
             return;
         }
 
+        localStorage.removeItem(`measurement_shapes_${measurementId}`);
         setScale(null);
         setScalePoints([]);
 
@@ -356,7 +375,21 @@ export default function MeasurementImageManager({
                             </div>
 
                             <div>
-                                <div className="relative">
+                                <div
+                                    className="relative"
+                                    onClick={(e) => {
+                                        if ((e.target as HTMLElement).closest("button")) return;
+                                        if (img.is_base_image && allowUpload) {
+                                            if (scale !== null) {
+                                                router.push(`/measurements/${measurementId}/draw`);
+                                            } else {
+                                                router.push(
+                                                    `/measurements/${measurementId}/images/${img.id}/scale`,
+                                                );
+                                            }
+                                        }
+                                    }}
+                                >
                                     <Image
                                         src={img.image_url}
                                         alt="Measurement"
@@ -434,7 +467,6 @@ export default function MeasurementImageManager({
                                                                 y2={p2.y}
                                                                 stroke="red"
                                                                 strokeWidth={2 * scaleRatio}
-                                                                // strokeDasharray={`${4 * scaleRatio} ${6 * scaleRatio}`}
                                                             />
                                                         );
                                                     }

@@ -30,15 +30,3 @@ export interface Inspection {
 export interface User {
     name: string;
 }
-
-export interface Measurement {
-    id: string;
-    property_id?: string;
-    inspection_id?: string | null;
-    date: string;
-    created_at: string;
-    updated_at: string;
-    created_by: string;
-    notes: string | null;
-    users?: User | null;
-}

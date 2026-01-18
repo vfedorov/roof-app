@@ -4,7 +4,7 @@ import { useServerAction } from "@/app/components/hooks/use-server-action";
 import { createProperty, updateProperty } from "@/app/properties/actions";
 import { FormEvent } from "react";
 import { redirect } from "next/navigation";
-import { Measurement } from "@/lib/inspections/types";
+import { Measurement } from "@/lib/measurements/types";
 import Link from "next/link";
 
 export function EditPropertyForm({

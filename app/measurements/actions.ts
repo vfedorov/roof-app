@@ -40,9 +40,6 @@ export async function updateMeasurement(formData: FormData) {
     const inspectionId = formData.get("inspection_id") as string;
     const date = formData.get("date") as string;
     const summary_notes = formData.get("summary_notes") as string;
-    const user = await getUser();
-
-    const now = new Date().toISOString();
 
     const { error: measurementError } = await supabase
         .from("measurement_sessions")
@@ -51,7 +48,7 @@ export async function updateMeasurement(formData: FormData) {
             inspection_id: inspectionId || null,
             date: date,
             notes: summary_notes,
-            updated_at: now,
+            updated_at: new Date().toISOString(),
         })
         .eq("id", id);
 
@@ -60,7 +57,7 @@ export async function updateMeasurement(formData: FormData) {
     }
 
     revalidatePath(`/measurements/${id}`);
-    redirect(`/measurements/${id}`);
+    return { ok: true, id };
 }
 
 export async function deleteMeasurement(id: string) {

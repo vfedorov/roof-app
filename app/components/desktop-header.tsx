@@ -70,7 +70,7 @@ export default function DesktopHeader() {
     const breadcrumbs = generateBreadcrumbs();
 
     return (
-        <div className="hidden md:block border-b mb-4">
+        <div className="hidden lg:block border-b mb-4">
             <div className="flex items-center justify-between p-4">
                 <div className="font-semibold h-8 flex items-center">
                     {pathname === "/dashboard" ? (

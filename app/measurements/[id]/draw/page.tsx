@@ -6,6 +6,7 @@ import { useToast } from "@/app/components/providers/toast-provider";
 import * as fabric from "fabric";
 import ShapeMetadataModal from "@/app/components/ShapeMetadataModal";
 import { SurfaceType } from "@/lib/measurements/types";
+import { calculatePolygonArea, outPolygonArea, syncVertexCircles } from "@/lib/measurements/shapes";
 
 export default function DrawPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -19,6 +20,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         naturalWidth: 0,
         naturalHeight: 0,
     });
+    const [polygonPointCount, setPolygonPointCount] = useState(0);
 
     const canvasWrapperRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -362,6 +364,9 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             // openMetadataModal(line);
             canvas.setActiveObject(line);
             updateText();
+            setActiveTool("select");
+            activeToolRef.current = "select";
+            startPointRef.current = null;
             return;
         }
 
@@ -374,6 +379,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             }
 
             polygonPointsRef.current.push(currentPoint);
+            setPolygonPointCount(polygonPointsRef.current.length);
             if (polygonPointsRef.current.length === 1) {
                 const startCircle = new fabric.Circle({
                     left: currentPoint.x,
@@ -421,7 +427,13 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
                 // Calculating the area for a temporary polygon
                 // const areaSqFt = calculatePolygonArea(polygonPointsRef.current);
-                const areaSqFt = calculatePolygonArea(tempPolygon);
+                const areaSqFt = calculatePolygonArea(
+                    tempPolygon,
+                    scaleRef.current,
+                    scalePointsRef.current,
+                    imageDimensionsRef.current,
+                    canvas,
+                );
                 const tempText = new fabric.IText(`${outPolygonArea(areaSqFt)}`, {
                     fontSize: 14,
                     fill: "red",
@@ -452,7 +464,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     };
 
     const finalizePolygon = () => {
-        if (!fabricRef.current || polygonPointsRef.current.length <= 3) return;
+        if (!fabricRef.current || polygonPointsRef.current.length < 3) return;
 
         const canvas = fabricRef.current;
 
@@ -490,7 +502,13 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         });
         (finalPolygon as any).id = crypto.randomUUID();
 
-        const areaSqFt = calculatePolygonArea(finalPolygon);
+        const areaSqFt = calculatePolygonArea(
+            finalPolygon,
+            scaleRef.current,
+            scalePointsRef.current,
+            imageDimensionsRef.current,
+            canvas,
+        );
         const text = new fabric.IText(`${outPolygonArea(areaSqFt)}`, {
             fontSize: 14,
             fill: "red",
@@ -534,7 +552,13 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         // type_.set({ left: center.x, top: center.y - 15 });
 
         const updatePolygonText = () => {
-            const newArea = calculatePolygonArea(finalPolygon);
+            const newArea = calculatePolygonArea(
+                finalPolygon,
+                scaleRef.current,
+                scalePointsRef.current,
+                imageDimensionsRef.current,
+                canvas,
+            );
             const newCenter = finalPolygon.getCenterPoint();
             text.set({
                 text: `${outPolygonArea(newArea)}`,
@@ -553,9 +577,20 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         };
         (finalPolygon as any).updateTextFn = updatePolygonText;
 
-        finalPolygon.on("moving", updatePolygonText);
-        finalPolygon.on("scaling", updatePolygonText);
-        finalPolygon.on("modified", updatePolygonText);
+        finalPolygon.on("moving", () => {
+            updatePolygonText();
+            syncVertexCircles(finalPolygon, canvas);
+        });
+
+        finalPolygon.on("scaling", () => {
+            updatePolygonText();
+            syncVertexCircles(finalPolygon, canvas);
+        });
+
+        finalPolygon.on("modified", () => {
+            updatePolygonText();
+            syncVertexCircles(finalPolygon, canvas);
+        });
 
         canvas.add(finalPolygon, text); // , label_, type_);
         const vertexCircles: fabric.Circle[] = [];
@@ -613,7 +648,10 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         // openMetadataModal(finalPolygon);
         canvas.setActiveObject(finalPolygon);
         polygonPointsRef.current = [];
+        setPolygonPointCount(0);
         canvas.renderAll();
+        setActiveTool("select");
+        activeToolRef.current = "select";
     };
 
     const handleDeleteSelected = () => {
@@ -647,65 +685,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         // Removing the selection
         canvas.discardActiveObject();
         canvas.renderAll();
-    };
-
-    const calculatePolygonArea = (polygon: fabric.Polygon): number => {
-        if (polygon.points.length < 3) return 0;
-
-        // Get the transformation matrix
-        const matrix = polygon.calcTransformMatrix();
-
-        // Transform all the points taking into account the transformation
-        const transformedPoints = applyTransformToPoints(polygon.points, matrix);
-
-        // Calculate the area using the lacing formula
-        let pixelArea = 0;
-        const n = transformedPoints.length;
-        for (let i = 0; i < n; i++) {
-            const j = (i + 1) % n;
-            pixelArea += transformedPoints[i].x * transformedPoints[j].y;
-            pixelArea -= transformedPoints[j].x * transformedPoints[i].y;
-        }
-        pixelArea = Math.abs(pixelArea) / 2;
-
-        // Checking the scale
-        if (scaleRef.current === null || scalePointsRef.current.length !== 2) {
-            return 0;
-        }
-
-        const canvasWidth = fabricRef.current?.getWidth() || 1;
-        const canvasHeight = fabricRef.current?.getHeight() || 1;
-        const naturalWidth = imageDimensionsRef.current.naturalWidth;
-        const naturalHeight = imageDimensionsRef.current.naturalHeight;
-
-        const [p1Nat, p2Nat] = scalePointsRef.current;
-        const p1Canvas = {
-            x: (p1Nat.x / naturalWidth) * canvasWidth,
-            y: (p1Nat.y / naturalHeight) * canvasHeight,
-        };
-        const p2Canvas = {
-            x: (p2Nat.x / naturalWidth) * canvasWidth,
-            y: (p2Nat.y / naturalHeight) * canvasHeight,
-        };
-
-        const scaleLinePx = Math.sqrt(
-            Math.pow(p2Canvas.x - p1Canvas.x, 2) + Math.pow(p2Canvas.y - p1Canvas.y, 2),
-        );
-
-        const feetPerPx = scaleRef.current / scaleLinePx;
-        const areaSqFt = pixelArea * (feetPerPx * feetPerPx);
-
-        return areaSqFt;
-    };
-
-    const outPolygonArea = (polygonArea: number): string => {
-        let outArea = "";
-        if (polygonArea > 100) {
-            outArea = (polygonArea / 100).toFixed(2).toString() + " square";
-        } else {
-            outArea = polygonArea.toFixed(2).toString() + " sq ft";
-        }
-        return outArea;
     };
     // ───────────────────────────────────────────────
     // Saving shape data
@@ -1338,7 +1317,13 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     // type_.set({ left: center.x, top: center.y - 15 });
 
                     const updatePolygonText = () => {
-                        const newArea = calculatePolygonArea(polygon);
+                        const newArea = calculatePolygonArea(
+                            polygon,
+                            scaleRef.current,
+                            scalePointsRef.current,
+                            imageDimensionsRef.current,
+                            canvas,
+                        );
                         const newCenter = polygon.getCenterPoint();
                         text.set({
                             text: `${outPolygonArea(newArea)}`,
@@ -1358,9 +1343,20 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
                     (polygon as any).updateTextFn = updatePolygonText;
 
-                    polygon.on("moving", updatePolygonText);
-                    polygon.on("scaling", updatePolygonText);
-                    polygon.on("modified", updatePolygonText);
+                    polygon.on("moving", () => {
+                        updatePolygonText();
+                        syncVertexCircles(polygon, canvas);
+                    });
+
+                    polygon.on("scaling", () => {
+                        updatePolygonText();
+                        syncVertexCircles(polygon, canvas);
+                    });
+
+                    polygon.on("modified", () => {
+                        updatePolygonText();
+                        syncVertexCircles(polygon, canvas);
+                    });
 
                     canvas.add(polygon, text); //, label_, type_);
                     updatePolygonText();
@@ -1456,6 +1452,15 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     >
                         🔍 Magnify
                     </button>
+                    {activeTool === "polygon" && polygonPointCount >= 3 && (
+                        <button
+                            type="button"
+                            className="btn btn-danger"
+                            onClick={() => finalizePolygon()}
+                        >
+                            Finish Polygon
+                        </button>
+                    )}
                     {/*<button*/}
                     {/*    type="button"*/}
                     {/*    className="btn btn-outline"*/}
@@ -1497,6 +1502,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                         setActiveTool("select");
                         startPointRef.current = null;
                         polygonPointsRef.current = [];
+                        setPolygonPointCount(0);
                         if (fabricRef.current) {
                             if (tempStartPointRef.current)
                                 fabricRef.current.remove(tempStartPointRef.current);
@@ -1538,7 +1544,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 </button>
                 {activeTool === "polygon" && (
                     <span className="text-sm text-gray-300 ml-2">
-                        Double-click to complete the polygon creation.
+                        Tap <strong>Finish Polygon</strong> or double-tap to close the shape.
                     </span>
                 )}
             </div>

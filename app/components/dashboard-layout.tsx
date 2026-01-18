@@ -14,7 +14,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             {user && (
                 <>
                     {/* Desktop sidebar */}
-                    <aside className="dashboard hidden md:flex flex-col">
+                    <aside className="dashboard hidden lg:flex flex-col">
                         <div className="items-center gap-3 mb-8 sidebar-title">
                             <img src="/logo.png" alt="logo" className="h-14 w-auto" />
                             <span className="block mt-4 ml-2.5">Roof App</span>

@@ -58,7 +58,7 @@ export default function MobileHeader({ role }: { role: string }) {
     }
 
     return (
-        <div className="md:hidden border-b mb-4">
+        <div className="lg:hidden border-b mb-4">
             <div className="flex items-center justify-between p-4">
                 <div className="font-semibold h-8 flex items-center">
                     {isDashboard ? (

@@ -142,8 +142,8 @@ html, body {
     @apply text-xl font-bold mb-4;
   }
   .dashboard {
-    @apply hidden md:flex md:flex-col
-    w-72 lg:w-80 h-screen p-6
+    @apply hidden lg:flex lg:flex-col
+    w-72 xl:w-80 h-screen p-6
     border-r bg-white text-gray-900
     dark:bg-gray-900 dark:text-gray-100 dark:border-gray-700
     shadow-sm;
@@ -154,7 +154,7 @@ html, body {
   }
 
   .main-content {
-    @apply flex-1 p-2 md:p-10 max-w-5xl mx-auto w-full;
+    @apply flex-1 p-2 lg:p-10 max-w-5xl mx-auto w-full;
   }
 
   .page-wrapper {

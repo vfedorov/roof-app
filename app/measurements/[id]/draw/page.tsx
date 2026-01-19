@@ -6,7 +6,15 @@ import { useToast } from "@/app/components/providers/toast-provider";
 import * as fabric from "fabric";
 import ShapeMetadataModal from "@/app/components/ShapeMetadataModal";
 import { SurfaceType } from "@/lib/measurements/types";
-import { calculatePolygonArea, outPolygonArea, syncVertexCircles } from "@/lib/measurements/shapes";
+import {
+    calculatePolygonArea,
+    createLineVertexPoints,
+    outPolygonArea,
+    removeLinePoints,
+    syncLinePoints,
+    syncVertexCircles,
+    updatePolygonBoundingBox,
+} from "@/lib/measurements/shapes";
 import { createMagnifier } from "@/lib/measurements/magnifier";
 import { updateLineLength } from "@/lib/measurements/lineGeometry";
 
@@ -185,7 +193,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         const currentPoint = new fabric.Point(pointer.x, pointer.y);
 
         if (isMagnifierActive && magnifierRef.current) {
-            magnifierRef.current.show(pointer.x, pointer.y);
+            magnifierRef.current.show(pointer.x, pointer.y, 1);
         }
 
         if ("ontouchstart" in window && opt.e instanceof TouchEvent) {
@@ -278,10 +286,11 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 cornerStrokeColor: "red",
                 transparentCorners: true,
                 strokeUniform: true,
+                objectCaching: false,
             });
             line.set({
                 originX: "left",
-                originY: "center",
+                originY: "top",
                 cornerStyle: "circle",
             });
             (line as any).id = crypto.randomUUID();
@@ -340,6 +349,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
             const onLineChanged = () => {
                 updateText();
+                syncLinePoints(line, canvas);
                 autosave();
             };
 
@@ -347,9 +357,24 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             line.on("moving", onLineChanged);
             line.on("scaling", onLineChanged);
             line.on("modified", onLineChanged);
+            line.on("rotating", onLineChanged);
 
             canvas.add(line, text); //, label_, type_);
+            const vertexCircles = createLineVertexPoints(
+                line,
+                canvas,
+                updateText,
+                syncLinePoints,
+                autosave,
+            );
+
+            (line as any).vertexCircles = vertexCircles;
+
+            // Первоначальная синхронизация
+            syncLinePoints(line, canvas);
+
             // openMetadataModal(line);
+
             canvas.setActiveObject(line);
             updateText();
             setActiveTool("select");
@@ -584,6 +609,12 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             autosave();
         });
 
+        finalPolygon.on("rotating", () => {
+            updatePolygonText();
+            syncVertexCircles(finalPolygon, canvas);
+            autosave();
+        });
+
         canvas.add(finalPolygon, text); // , label_, type_);
         const vertexCircles: fabric.Circle[] = [];
 
@@ -594,7 +625,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 radius: 6,
                 fill: "white",
                 stroke: "red",
-                strokeWidth: 2,
+                strokeWidth: 1,
                 selectable: true,
                 hasControls: false,
                 hoverCursor: "pointer",
@@ -614,21 +645,34 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
                 if (!poly || idx === undefined) return;
 
+                const matrix = poly.calcTransformMatrix();
+                const inverseMatrix = fabric.util.invertTransform(matrix);
+
                 // Получаем новую позицию точки
                 const newX = circle.left! + circle.radius! / 2;
                 const newY = circle.top! + circle.radius! / 2;
 
+                const localPoint = new fabric.Point(newX, newY).transform(inverseMatrix);
+
+                const adjustedX = localPoint.x + poly.pathOffset.x;
+                const adjustedY = localPoint.y + poly.pathOffset.y;
+
                 // Обновляем точку в массиве
-                poly.points[idx].x = newX;
-                poly.points[idx].y = newY;
+                poly.points[idx].x = adjustedX;
+                poly.points[idx].y = adjustedY;
 
                 // Перерисовываем полигон
-                poly.set({ dirty: true });
+                updatePolygonText();
+                // poly.set({ dirty: true });
+                // poly.setCoords();
+                // poly.setBoundingBox();
+                updatePolygonBoundingBox(poly);
                 canvas.renderAll();
 
                 // Обновляем текст (площадь)
                 const updateFn = (poly as any).updateTextFn; // см. шаг 3
                 if (updateFn) updateFn();
+                syncVertexCircles(poly, canvas);
                 autosave();
             });
             canvas.add(circle);
@@ -662,19 +706,20 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             if ((obj as any).associatedText) {
                 canvas.remove((obj as any).associatedText);
             }
-            if ((obj as any).associatedLabel) {
-                canvas.remove((obj as any).associatedLabel);
+            if ((obj as any).vertexCircles && obj.type === "polygon") {
+                (obj as any).vertexCircles.forEach((c: fabric.Object) => {
+                    canvas.remove(c);
+                });
             }
+
+            // Удаляем точки линий с помощью новой функции
+            if ((obj as any).vertexCircles && obj.type === "line") {
+                removeLinePoints(obj, canvas);
+            }
+
             canvas.remove(obj);
         });
 
-        activeObjects.forEach((obj) => {
-            if ((obj as any).associatedText) canvas.remove((obj as any).associatedText);
-            if ((obj as any).vertexCircles) {
-                (obj as any).vertexCircles.forEach((c: fabric.Object) => canvas.remove(c));
-            }
-            canvas.remove(obj);
-        });
         // Removing the selection
         canvas.discardActiveObject();
         canvas.renderAll();
@@ -824,7 +869,11 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             if (!isMagnifierActiveRef.current || !magnifierRef.current || !opt.e) return;
 
             const pointer = canvas.getScenePoint(opt.e);
-            magnifierRef.current.show(pointer.x, pointer.y);
+            let k = 1;
+            if (opt.e instanceof TouchEvent && opt.e.type === "touchmove") {
+                k = 2.02675;
+            }
+            magnifierRef.current.show(pointer.x * k, pointer.y * k, k);
         });
 
         magnifierRef.current = createMagnifier(canvas, canvasWrapperRef.current!);
@@ -1181,10 +1230,11 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                         cornerStrokeColor: "red",
                         transparentCorners: true,
                         strokeUniform: true,
+                        objectCaching: false,
                     });
                     line.set({
                         originX: "left",
-                        originY: "center",
+                        originY: "top",
                         cornerStyle: "circle",
                     });
                     (line as any).id = shape.id || crypto.randomUUID();
@@ -1242,14 +1292,27 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
                     const onLineChanged = () => {
                         updateText();
+                        syncLinePoints(line, canvas);
                         autosave();
                     };
 
                     line.on("moving", onLineChanged);
                     line.on("scaling", onLineChanged);
                     line.on("modified", onLineChanged);
+                    line.on("rotating", onLineChanged);
 
                     canvas.add(line, text); // , label_, type_);
+                    const vertexCircles = createLineVertexPoints(
+                        line,
+                        canvas,
+                        updateText,
+                        syncLinePoints,
+                        autosave,
+                    );
+
+                    (line as any).vertexCircles = vertexCircles;
+
+                    syncLinePoints(line, canvas);
                     updateText();
                 } else if (shape.shape_type === "polygon") {
                     const polygon = new fabric.Polygon(points, {
@@ -1342,16 +1405,25 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     polygon.on("moving", () => {
                         updatePolygonText();
                         syncVertexCircles(polygon, canvas);
+                        autosave();
                     });
 
                     polygon.on("scaling", () => {
                         updatePolygonText();
                         syncVertexCircles(polygon, canvas);
+                        autosave();
                     });
 
                     polygon.on("modified", () => {
                         updatePolygonText();
                         syncVertexCircles(polygon, canvas);
+                        autosave();
+                    });
+
+                    polygon.on("rotating", () => {
+                        updatePolygonText();
+                        syncVertexCircles(polygon, canvas);
+                        autosave();
                     });
 
                     canvas.add(polygon, text); //, label_, type_);
@@ -1366,7 +1438,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                             radius: 6,
                             fill: "white",
                             stroke: "red",
-                            strokeWidth: 2,
+                            strokeWidth: 1,
                             selectable: true,
                             hasControls: false,
                             hoverCursor: "pointer",
@@ -1387,21 +1459,35 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
                             if (!poly || idx === undefined) return;
 
+                            const matrix = poly.calcTransformMatrix();
+                            const inverseMatrix = fabric.util.invertTransform(matrix);
+
                             // Получаем новую позицию точки
                             const newX = circle.left! + circle.radius! / 2;
                             const newY = circle.top! + circle.radius! / 2;
 
+                            const localPoint = new fabric.Point(newX, newY).transform(
+                                inverseMatrix,
+                            );
+
+                            const adjustedX = localPoint.x + poly.pathOffset.x;
+                            const adjustedY = localPoint.y + poly.pathOffset.y;
+
                             // Обновляем точку в массиве
-                            poly.points[idx].x = newX;
-                            poly.points[idx].y = newY;
+                            poly.points[idx].x = adjustedX;
+                            poly.points[idx].y = adjustedY;
 
                             // Перерисовываем полигон
-                            poly.set({ dirty: true });
+                            // poly.set({ dirty: true });
+                            // poly.setCoords();
+                            updatePolygonBoundingBox(poly);
+                            // poly.setBoundingBox();
                             canvas.renderAll();
 
                             // Обновляем текст (площадь)
                             const updateFn = (poly as any).updateTextFn;
                             if (updateFn) updateFn();
+                            syncVertexCircles(poly, canvas);
                             autosave();
                         });
                         canvas.add(circle);
@@ -1446,13 +1532,13 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     <button onClick={handleBackAndSave} className="btn btn-outline">
                         ← Back
                     </button>
-                    <button onClick={() => saveShapesLocally()} className="btn btn-outline">
-                        Save shapes
-                    </button>
                     <button
                         onClick={() => {
                             setIsMagnifierActive((prev) => {
                                 console.log("---set is magnifier actinv: ", prev);
+                                if (prev) {
+                                    magnifierRef.current?.hide();
+                                }
                                 return !prev;
                             });
                         }}

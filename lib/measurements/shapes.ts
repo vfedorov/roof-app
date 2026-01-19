@@ -72,3 +72,200 @@ export function syncVertexCircles(polygon: fabric.Polygon, canvas: fabric.Canvas
 
     canvas.renderAll();
 }
+
+export const updatePolygonBoundingBox = (polygon: fabric.Polygon) => {
+    if (!polygon.points || polygon.points.length === 0) return;
+    //
+    // // Находим минимальные и максимальные значения координат
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    polygon.points.forEach((point) => {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+    });
+
+    // Рассчитываем новые размеры
+    const width = Math.max(1, maxX - minX);
+    const height = Math.max(1, maxY - minY);
+
+    // Принудительно обновляем bounding box
+    polygon.set({ left: minX, top: minY, width: width, height: height, dirty: true });
+    polygon.setCoords();
+    polygon.setBoundingBox();
+};
+
+export const createLineVertexPoints = (
+    line: fabric.Line,
+    canvas: fabric.Canvas,
+    updateTextFn: () => void,
+    syncLinePoints: (line: fabric.Line, canvas: fabric.Canvas) => void,
+    autosave: () => void,
+): fabric.Circle[] => {
+    const vertexCircles: fabric.Circle[] = [];
+
+    // Получаем координаты концов линии
+    const coords = line.getCoords();
+    const x1 = coords[0].x;
+    const y1 = coords[0].y;
+    const x2 = coords[1].x;
+    const y2 = coords[1].y;
+
+    // Создаем точки для начала и конца линии
+    [0, 1].forEach((idx) => {
+        const isStart = idx === 0;
+        const pointX = isStart ? x1 : x2;
+        const pointY = isStart ? y1 : y2;
+
+        const circle = new fabric.Circle({
+            left: pointX,
+            top: pointY,
+            radius: 6,
+            fill: "white",
+            stroke: "blue",
+            strokeWidth: 1,
+            selectable: true,
+            hasControls: false,
+            hoverCursor: "pointer",
+        });
+        console.log("circle (", pointX, ":", pointY, ")");
+
+        circle.set({
+            originX: "center",
+            originY: "center",
+        });
+
+        (circle as any).belongsTo = line;
+        (circle as any).pointIndex = idx;
+
+        vertexCircles.push(circle);
+
+        setupLinePointHandlers(circle, line, canvas, updateTextFn, syncLinePoints, autosave);
+
+        canvas.add(circle);
+    });
+
+    return vertexCircles;
+};
+
+/**
+ * Настраивает обработчики для точек линии
+ */
+const setupLinePointHandlers = (
+    circle: fabric.Circle,
+    line: fabric.Line,
+    canvas: fabric.Canvas,
+    updateTextFn: () => void,
+    syncLinePoints: (line: fabric.Line, canvas: fabric.Canvas) => void,
+    autosave: () => void,
+) => {
+    circle.on("moving", (e) => {
+        console.log("moving line");
+        e.e?.stopPropagation?.();
+
+        const lineObj = (circle as any).belongsTo as fabric.Line;
+        const pointIdx = (circle as any).pointIndex as number;
+
+        if (!lineObj || pointIdx === undefined) return;
+
+        const pointX = circle.left! + circle.radius! / 2;
+        const pointY = circle.top! + circle.radius! / 2;
+
+        const coords = lineObj.getCoords();
+        const startPoint = coords[0];
+        const endPoint = coords[1];
+        if (pointIdx === 0) {
+            startPoint.x = pointX;
+            startPoint.y = pointY;
+        } else {
+            endPoint.x = pointX;
+            endPoint.y = pointY;
+        }
+
+        const dx = endPoint.x - startPoint.x;
+        const dy = endPoint.y - startPoint.y;
+        const new_angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+        let new_length = lineObj.width;
+        if (pointIdx === 1) {
+            new_length = Math.sqrt(dx * dx + dy * dy);
+        }
+
+        lineObj.set({
+            left: startPoint.x,
+            top: startPoint.y,
+            angle: new_angle,
+            width: new_length,
+            dirty: true,
+        });
+
+        lineObj.setCoords();
+        canvas.renderAll();
+
+        if (updateTextFn) updateTextFn();
+        syncLinePoints(lineObj, canvas);
+        autosave();
+    });
+
+    circle.on("mousedown", (e) => {
+        e.e?.stopPropagation?.();
+    });
+};
+
+/**
+ * Синхронизирует позиции точек линии
+ */
+export const syncLinePoints = (line: fabric.Line, canvas: fabric.Canvas) => {
+    if (!line || !canvas) return;
+
+    const points = (line as any).vertexCircles as fabric.Circle[];
+    if (!points || !Array.isArray(points) || points.length < 2) return;
+
+    // Получаем текущие координаты линии
+    const coords = line.getCoords();
+    const x1 = coords[0].x;
+    const y1 = coords[0].y;
+    const x2 = coords[1].x;
+    const y2 = coords[1].y;
+
+    // Обновляем позицию первой точки
+    if (points[0]) {
+        points[0].set({
+            left: x1 + (points[0].radius! / 2 || 0),
+            top: y1 + (points[0].radius! / 2 || 0),
+            dirty: true,
+        });
+        points[0].setCoords();
+    }
+
+    // Обновляем позицию второй точки
+    if (points[1]) {
+        points[1].set({
+            left: x2 + (points[1].radius! / 2 || 0),
+            top: y2 + (points[1].radius! / 2 || 0),
+            dirty: true,
+        });
+        points[1].setCoords();
+    }
+
+    canvas.requestRenderAll();
+};
+
+/**
+ * Удаляет точки линии
+ */
+export const removeLinePoints = (line: fabric.Object, canvas: fabric.Canvas) => {
+    if (!line || !canvas) return;
+
+    const vertexCircles = (line as any).vertexCircles as fabric.Circle[];
+    if (!vertexCircles || !Array.isArray(vertexCircles)) return;
+
+    vertexCircles.forEach((circle) => {
+        if (canvas.contains(circle)) {
+            canvas.remove(circle);
+        }
+    });
+};

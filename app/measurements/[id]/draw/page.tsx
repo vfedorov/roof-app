@@ -8,6 +8,7 @@ import ShapeMetadataModal from "@/app/components/ShapeMetadataModal";
 import { SurfaceType } from "@/lib/measurements/types";
 import { calculatePolygonArea, outPolygonArea, syncVertexCircles } from "@/lib/measurements/shapes";
 import { createMagnifier } from "@/lib/measurements/magnifier";
+import { updateLineLength } from "@/lib/measurements/lineGeometry";
 
 export default function DrawPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -46,6 +47,8 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     const isMagnifierActiveRef = useRef(false);
     const magnifierRef = useRef<ReturnType<typeof createMagnifier> | null>(null);
     const [hasSelection, setHasSelection] = useState(false);
+    const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const [editingMetadata, setEditingMetadata] = useState<{
         id: string;
@@ -274,6 +277,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 cornerColor: "red",
                 cornerStrokeColor: "red",
                 transparentCorners: true,
+                strokeUniform: true,
             });
             line.set({
                 originX: "left",
@@ -323,62 +327,26 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             // (line as any).associatedLabel = label_;
             // (line as any).associatedType = type_;
 
-            // Calculate Scale
-            const scaleLinePx = Math.sqrt(
-                Math.pow(scalePointsRef.current[1].x - scalePointsRef.current[0].x, 2) +
-                    Math.pow(scalePointsRef.current[1].y - scalePointsRef.current[0].y, 2),
-            );
-
             // Update length and position
-            const updateText = () => {
-                const coords = line.getCoords();
-                const finalP1 = coords[0];
-                const finalP2 = coords[1];
-
-                // Calculating the length in feet
-                if (
-                    scaleRef.current === null ||
-                    scalePointsRef.current.length !== 2 ||
-                    imageDimensionsRef.current.naturalWidth === 0
-                ) {
-                    text.set({ text: "–" });
-                    return;
-                }
-
-                // if ((line as any).label) {
-                //     label_.set({ text: (line as any).label });
-                // }
-                //
-                // if ((line as any).surface_type) {
-                //     type_.set({ text: (line as any).surface_type });
-                // }
-                const currentLinePx = finalP2.distanceFrom(finalP1);
-                const displayedWidth = canvas.getWidth();
-                const scaleRatio = imageDimensionsRef.current.naturalWidth / displayedWidth;
-                const currentLinePxNatural = currentLinePx * scaleRatio;
-                const lengthFt = (currentLinePxNatural / scaleLinePx) * scaleRef.current;
-                // Text position
-                const lineCenterX = (finalP1.x + finalP2.x) / 2 - 25;
-                const lineCenterY = (finalP1.y + finalP2.y) / 2 - 10;
-                text.set({
-                    left: lineCenterX,
-                    top: lineCenterY,
-                    text: `${lengthFt.toFixed(2)} ft`,
+            const updateText = () =>
+                updateLineLength({
+                    line,
+                    text,
+                    canvas,
+                    scale: scaleRef.current,
+                    scalePoints: scalePointsRef.current,
+                    naturalWidth: imageDimensionsRef.current.naturalWidth,
                 });
-                // label_.set({
-                //     left: lineCenterX,
-                //     top: lineCenterY - 30,
-                // });
-                // type_.set({
-                //     left: lineCenterX,
-                //     top: lineCenterY - 15,
-                // });
+
+            const onLineChanged = () => {
+                updateText();
+                autosave();
             };
 
             // Events
-            line.on("moving", updateText);
-            line.on("scaling", updateText);
-            line.on("modified", updateText);
+            line.on("moving", onLineChanged);
+            line.on("scaling", onLineChanged);
+            line.on("modified", onLineChanged);
 
             canvas.add(line, text); //, label_, type_);
             // openMetadataModal(line);
@@ -387,6 +355,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             setActiveTool("select");
             activeToolRef.current = "select";
             startPointRef.current = null;
+            autosave();
             return;
         }
 
@@ -600,16 +569,19 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         finalPolygon.on("moving", () => {
             updatePolygonText();
             syncVertexCircles(finalPolygon, canvas);
+            autosave();
         });
 
         finalPolygon.on("scaling", () => {
             updatePolygonText();
             syncVertexCircles(finalPolygon, canvas);
+            autosave();
         });
 
         finalPolygon.on("modified", () => {
             updatePolygonText();
             syncVertexCircles(finalPolygon, canvas);
+            autosave();
         });
 
         canvas.add(finalPolygon, text); // , label_, type_);
@@ -632,7 +604,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 originY: "center",
             });
 
-            // Связываем точку с полигоном и индексом
             (circle as any).belongsTo = finalPolygon;
             (circle as any).vertexIndex = idx;
 
@@ -658,6 +629,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 // Обновляем текст (площадь)
                 const updateFn = (poly as any).updateTextFn; // см. шаг 3
                 if (updateFn) updateFn();
+                autosave();
             });
             canvas.add(circle);
         });
@@ -672,6 +644,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         canvas.renderAll();
         setActiveTool("select");
         activeToolRef.current = "select";
+        autosave();
     };
 
     const handleDeleteSelected = () => {
@@ -709,7 +682,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     // ───────────────────────────────────────────────
     // Saving shape data
     // ───────────────────────────────────────────────
-    const saveShapesLocally = () => {
+    const saveShapesLocally = (silent = false) => {
         if (!fabricRef.current || !measurementId) return;
 
         const canvas = fabricRef.current;
@@ -776,10 +749,33 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 `measurement_shapes_${measurementId}`,
                 JSON.stringify(shapesToSave),
             );
-            toast({ title: "Draft saved", description: "Shapes cached locally." });
+            if (!silent) {
+                toast({ title: "Draft saved", description: "Shapes cached locally." });
+            }
         } catch (e) {
-            toast({ title: "Warning", description: "Failed to cache shapes." });
+            if (!silent) {
+                toast({ title: "Warning", description: "Failed to cache shapes." });
+            }
         }
+    };
+
+    const autosave = () => {
+        console.log("----autosave!!!");
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+        }
+
+        setSaveStatus("saving");
+
+        saveTimeoutRef.current = setTimeout(() => {
+            try {
+                saveShapesLocally(true);
+                setSaveStatus("saved");
+            } catch (e) {
+                console.error("Autosave failed", e);
+                setSaveStatus("error");
+            }
+        }, 600); // debounce ~0.5–0.7 сек
     };
     // ───────────────────────────────────────────────
     // Loading measurement data
@@ -1184,6 +1180,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                         cornerColor: "red",
                         cornerStrokeColor: "red",
                         transparentCorners: true,
+                        strokeUniform: true,
                     });
                     line.set({
                         originX: "left",
@@ -1233,60 +1230,24 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     // (line as any).associatedLabel = label_;
                     // (line as any).associatedType = type_;
 
-                    const updateText = () => {
-                        const coords = line.getCoords();
-                        const finalP1 = coords[0];
-                        const finalP2 = coords[1];
-
-                        if (
-                            scaleRef.current === null ||
-                            scalePointsRef.current.length !== 2 ||
-                            imageDimensionsRef.current.naturalWidth === 0
-                        ) {
-                            text.set({ text: "–" });
-                            return;
-                        }
-
-                        // if ((line as any).label) {
-                        //     label_.set({ text: (line as any).label });
-                        // }
-                        //
-                        // if ((line as any).surface_type) {
-                        //     type_.set({ text: (line as any).surface_type });
-                        // }
-                        const currentLinePx = finalP2.distanceFrom(finalP1);
-                        const displayedWidth = canvas.getWidth();
-                        const scaleRatio = imageDimensionsRef.current.naturalWidth / displayedWidth;
-                        const currentLinePxNatural = currentLinePx * scaleRatio;
-                        const scaleLinePx = Math.sqrt(
-                            Math.pow(scalePointsRef.current[1].x - scalePointsRef.current[0].x, 2) +
-                                Math.pow(
-                                    scalePointsRef.current[1].y - scalePointsRef.current[0].y,
-                                    2,
-                                ),
-                        );
-                        const lengthFt = (currentLinePxNatural / scaleLinePx) * scaleRef.current;
-
-                        const lineCenterX = (finalP1.x + finalP2.x) / 2 - 25;
-                        const lineCenterY = (finalP1.y + finalP2.y) / 2 - 10;
-                        text.set({
-                            left: lineCenterX,
-                            top: lineCenterY,
-                            text: `${lengthFt.toFixed(2)} ft`,
+                    const updateText = () =>
+                        updateLineLength({
+                            line,
+                            text,
+                            canvas,
+                            scale: scaleRef.current,
+                            scalePoints: scalePointsRef.current,
+                            naturalWidth: imageDimensionsRef.current.naturalWidth,
                         });
-                        // label_.set({
-                        //     left: lineCenterX,
-                        //     top: lineCenterY - 30,
-                        // });
-                        // type_.set({
-                        //     left: lineCenterX,
-                        //     top: lineCenterY - 15,
-                        // });
+
+                    const onLineChanged = () => {
+                        updateText();
+                        autosave();
                     };
 
-                    line.on("moving", updateText);
-                    line.on("scaling", updateText);
-                    line.on("modified", updateText);
+                    line.on("moving", onLineChanged);
+                    line.on("scaling", onLineChanged);
+                    line.on("modified", onLineChanged);
 
                     canvas.add(line, text); // , label_, type_);
                     updateText();
@@ -1441,6 +1402,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                             // Обновляем текст (площадь)
                             const updateFn = (poly as any).updateTextFn;
                             if (updateFn) updateFn();
+                            autosave();
                         });
                         canvas.add(circle);
                     });
@@ -1466,6 +1428,14 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         // saveShapesLocally();
         router.back();
     };
+
+    useEffect(() => {
+        return () => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+        };
+    }, []);
     // ───────────────────────────────────────────────
     // UI
     // ───────────────────────────────────────────────
@@ -1476,7 +1446,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     <button onClick={handleBackAndSave} className="btn btn-outline">
                         ← Back
                     </button>
-                    <button onClick={saveShapesLocally} className="btn btn-outline">
+                    <button onClick={() => saveShapesLocally()} className="btn btn-outline">
                         Save shapes
                     </button>
                     <button
@@ -1559,6 +1529,13 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     >
                         Polygon
                     </button>
+                    <div className="flex items-center gap-2 text-sm text-gray-300">
+                        {saveStatus === "saving" && <span>Saving…</span>}
+                        {saveStatus === "saved" && <span className="text-green-400">Saved</span>}
+                        {saveStatus === "error" && (
+                            <span className="text-red-400">Save failed</span>
+                        )}
+                    </div>
                 </div>
                 <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
                     {activeTool === "polygon" && polygonPointCount >= 3 && (

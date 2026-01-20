@@ -374,14 +374,129 @@ export default function MeasurementImageManager({
                                 className="absolute inset-0 pointer-events-none"
                                 width="100%"
                                 height="100%"
-                                viewBox={`0 0 ${
-                                    imageDimensions[img.id].naturalWidth
-                                } ${imageDimensions[img.id].naturalHeight}`}
+                                viewBox={`0 0 ${imageDimensions[img.id].naturalWidth} ${imageDimensions[img.id].naturalHeight}`}
                                 preserveAspectRatio="xMidYMid meet"
                                 xmlns="http://www.w3.org/2000/svg"
                             >
-                                {/* ТВОЙ СУЩЕСТВУЮЩИЙ SVG — БЕЗ ИЗМЕНЕНИЙ */}
-                                {/* scalePoints + shapes.map(...) */}
+                                {(() => {
+                                    const scaleRatio =
+                                        imageDimensions[img.id]?.naturalWidth /
+                                            imageDimensions[img.id]?.displayedWidth || 1;
+
+                                    return (
+                                        <>
+                                            {scalePoints.map((p, i) => (
+                                                <circle
+                                                    key={i}
+                                                    cx={p.x}
+                                                    cy={p.y}
+                                                    r={4 * scaleRatio}
+                                                    fill="red"
+                                                    stroke="white"
+                                                    strokeWidth={2 * scaleRatio}
+                                                />
+                                            ))}
+
+                                            {scalePoints.length === 2 && (
+                                                <line
+                                                    x1={scalePoints[0].x}
+                                                    y1={scalePoints[0].y}
+                                                    x2={scalePoints[1].x}
+                                                    y2={scalePoints[1].y}
+                                                    stroke="red"
+                                                    strokeWidth={4 * scaleRatio}
+                                                    strokeDasharray={`${4 * scaleRatio} ${6 * scaleRatio}`}
+                                                />
+                                            )}
+                                        </>
+                                    );
+                                })()}
+
+                                {shapes.map((shape, idx) => {
+                                    const scaleRatio =
+                                        imageDimensions[img.id]?.naturalWidth /
+                                            imageDimensions[img.id]?.displayedWidth || 1;
+
+                                    if (shape.shape_type === "line" && shape.points.length === 2) {
+                                        const [p1, p2] = shape.points;
+                                        const midX = (p1.x + p2.x) / 2;
+                                        const midY = (p1.y + p2.y) / 2;
+
+                                        return (
+                                            <g key={`shape-${idx}`}>
+                                                <line
+                                                    x1={p1.x}
+                                                    y1={p1.y}
+                                                    x2={p2.x}
+                                                    y2={p2.y}
+                                                    stroke="red"
+                                                    strokeWidth={2 * scaleRatio}
+                                                />
+                                                <text
+                                                    x={midX}
+                                                    y={midY - 8}
+                                                    textAnchor="middle"
+                                                    fill="white"
+                                                    fontSize={FONT_SIZE / scaleRatio}
+                                                    fontWeight="bold"
+                                                    paintOrder="stroke"
+                                                    stroke="black"
+                                                    strokeWidth={0.5}
+                                                >
+                                                    {shape.magnitude || "0.00 ft"}
+                                                </text>
+                                            </g>
+                                        );
+                                    }
+
+                                    if (
+                                        shape.shape_type === "polygon" &&
+                                        shape.points.length >= 3
+                                    ) {
+                                        const pointsStr = shape.points
+                                            .map((p: any) => `${p.x},${p.y}`)
+                                            .join(" ");
+
+                                        const centroidX =
+                                            shape.points.reduce(
+                                                (sum: number, p: any) => sum + p.x,
+                                                0,
+                                            ) / shape.points.length;
+
+                                        const centroidY =
+                                            shape.points.reduce(
+                                                (sum: number, p: any) => sum + p.y,
+                                                0,
+                                            ) / shape.points.length;
+
+                                        return (
+                                            <g key={`shape-${idx}`}>
+                                                <polygon
+                                                    points={pointsStr}
+                                                    fill="rgba(255, 0, 0, 0.2)"
+                                                    stroke="red"
+                                                    strokeWidth={2 * scaleRatio}
+                                                />
+                                                <text
+                                                    x={centroidX}
+                                                    y={centroidY}
+                                                    textAnchor="middle"
+                                                    dominantBaseline="middle"
+                                                    fill="white"
+                                                    fontSize={FONT_SIZE / scaleRatio}
+                                                    fontWeight="bold"
+                                                    paintOrder="stroke"
+                                                    stroke="black"
+                                                    strokeWidth={0.5}
+                                                >
+                                                    {shape.magnitude || "0.00 sq ft"}
+                                                </text>
+                                            </g>
+                                        );
+                                    }
+
+                                    return null;
+                                })}
                             </svg>
                         )}
                     </div>

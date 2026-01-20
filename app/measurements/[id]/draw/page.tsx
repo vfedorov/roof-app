@@ -1627,8 +1627,8 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 )}
             </div>
 
-            <div ref={canvasWrapperRef} className="relative border shadow-md w-full h-[70vh]">
-                <div className="relative border shadow-md w-full h-[70vh]">
+            <div ref={canvasWrapperRef} className="relative border shadow-md w-full">
+                <div className="relative border shadow-md w-full">
                     <canvas ref={canvasRef} />
                     <div className="absolute top-4 left-4 z-10 bg-black/70 backdrop-blur rounded-lg p-2 flex gap-2">
                         <button

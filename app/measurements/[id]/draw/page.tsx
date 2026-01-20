@@ -17,6 +17,14 @@ import {
 } from "@/lib/measurements/shapes";
 import { createMagnifier } from "@/lib/measurements/magnifier";
 import { updateLineLength } from "@/lib/measurements/lineGeometry";
+import { useMeasurementLegend } from "@/lib/measurements/useMeasurementLegend";
+import MeasurementLegend from "@/app/components/MeasurementLegend";
+
+const FONT_SIZE = 20;
+const FONT_COLOR = "#C0C0C0";
+const FONT_STROKE = "white";
+const FONT_WEIGHT = "normal";
+const STROKE_WIDTH = 0.2;
 
 export default function DrawPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
@@ -57,6 +65,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     const [hasSelection, setHasSelection] = useState(false);
     const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [isLegendExpanded, setIsLegendExpanded] = useState(false);
 
     const [editingMetadata, setEditingMetadata] = useState<{
         id: string;
@@ -64,6 +73,13 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         surface_type: SurfaceType;
         waste_percentage: number;
     } | null>(null);
+
+    const { items: legendItems, selectShapeById } = useMeasurementLegend(
+        fabricRef,
+        scale,
+        scalePoints,
+        imageDimensions,
+    );
 
     useEffect(() => {
         activeToolRef.current = activeTool;
@@ -153,6 +169,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         (shape as any).label = data.label;
         (shape as any).surface_type = data.surface_type;
         (shape as any).waste_percentage = data.waste_percentage;
+        fabricRef.current.fire("object:modified", { target: shape });
 
         const textObj = (shape as any).associatedText;
         if (textObj) {
@@ -161,6 +178,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         }
 
         setEditingMetadata(null);
+        autosave();
         toast({ title: "Saved", description: "Shape metadata updated." });
     };
 
@@ -295,13 +313,16 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             });
             (line as any).id = crypto.randomUUID();
 
-            ["tl", "tr", "bl", "br", "mt", "mb"].forEach((key) => {
+            ["tl", "tr", "bl", "br", "mt", "mb", "mtr"].forEach((key) => {
                 line.setControlVisible(key, false);
             });
 
             const text = new fabric.IText("0.00 ft", {
-                fontSize: 14,
-                fill: "red",
+                fontSize: FONT_SIZE,
+                fontWeight: FONT_WEIGHT,
+                fill: FONT_COLOR,
+                stroke: FONT_STROKE,
+                strokeWidth: STROKE_WIDTH,
                 selectable: false,
                 evented: false,
             });
@@ -348,6 +369,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 });
 
             const onLineChanged = () => {
+                line.setCoords();
                 updateText();
                 syncLinePoints(line, canvas);
                 autosave();
@@ -360,6 +382,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             line.on("rotating", onLineChanged);
 
             canvas.add(line, text); //, label_, type_);
+            line.setCoords();
             const vertexCircles = createLineVertexPoints(
                 line,
                 canvas,
@@ -373,7 +396,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             // Первоначальная синхронизация
             syncLinePoints(line, canvas);
 
-            // openMetadataModal(line);
+            openMetadataModal(line);
 
             canvas.setActiveObject(line);
             updateText();
@@ -434,8 +457,11 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     selectable: false,
                     evented: false,
                     strokeUniform: true,
+                    lockRotation: true,
                 });
+
                 (tempPolygon as any).isTemp = true;
+                tempPolygon.setControlVisible("mtr", false);
                 tempPolygonRef.current = tempPolygon;
                 canvas.add(tempPolygon);
 
@@ -449,8 +475,11 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     canvas,
                 );
                 const tempText = new fabric.IText(`${outPolygonArea(areaSqFt)}`, {
-                    fontSize: 14,
-                    fill: "red",
+                    fontSize: FONT_SIZE,
+                    fontWeight: FONT_WEIGHT,
+                    fill: FONT_COLOR,
+                    stroke: FONT_STROKE,
+                    strokeWidth: STROKE_WIDTH,
                     selectable: false,
                     evented: false,
                     left: currentPoint.x,
@@ -507,6 +536,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             cornerColor: "red",
             cornerStrokeColor: "red",
             transparentCorners: true,
+            lockRotation: true,
         });
 
         finalPolygon.set({
@@ -515,6 +545,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             cornerStyle: "circle",
         });
         (finalPolygon as any).id = crypto.randomUUID();
+        finalPolygon.setControlVisible("mtr", false);
 
         const areaSqFt = calculatePolygonArea(
             finalPolygon,
@@ -524,8 +555,11 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             canvas,
         );
         const text = new fabric.IText(`${outPolygonArea(areaSqFt)}`, {
-            fontSize: 14,
-            fill: "red",
+            fontSize: FONT_SIZE,
+            fontWeight: FONT_WEIGHT,
+            fill: FONT_COLOR,
+            stroke: FONT_STROKE,
+            strokeWidth: STROKE_WIDTH,
             selectable: false,
             evented: false,
         });
@@ -591,31 +625,19 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         };
         (finalPolygon as any).updateTextFn = updatePolygonText;
 
-        finalPolygon.on("moving", () => {
+        const onPolygonChanged = () => {
+            finalPolygon.setCoords();
             updatePolygonText();
             syncVertexCircles(finalPolygon, canvas);
             autosave();
-        });
+        };
 
-        finalPolygon.on("scaling", () => {
-            updatePolygonText();
-            syncVertexCircles(finalPolygon, canvas);
-            autosave();
-        });
-
-        finalPolygon.on("modified", () => {
-            updatePolygonText();
-            syncVertexCircles(finalPolygon, canvas);
-            autosave();
-        });
-
-        finalPolygon.on("rotating", () => {
-            updatePolygonText();
-            syncVertexCircles(finalPolygon, canvas);
-            autosave();
-        });
+        finalPolygon.on("moving", onPolygonChanged);
+        finalPolygon.on("scaling", onPolygonChanged);
+        finalPolygon.on("modified", onPolygonChanged);
 
         canvas.add(finalPolygon, text); // , label_, type_);
+        finalPolygon.setCoords();
         const vertexCircles: fabric.Circle[] = [];
 
         finalPolygon.points.forEach((point, idx) => {
@@ -681,7 +703,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         // Сохраняем ссылки на точки внутри полигона
         (finalPolygon as any).vertexCircles = vertexCircles;
 
-        // openMetadataModal(finalPolygon);
+        openMetadataModal(finalPolygon);
         canvas.setActiveObject(finalPolygon);
         polygonPointsRef.current = [];
         setPolygonPointCount(0);
@@ -724,6 +746,28 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         canvas.discardActiveObject();
         canvas.renderAll();
     };
+
+    const handleEditMetadata = () => {
+        const canvas = fabricRef.current;
+        if (!canvas) return;
+        const activeObjects = canvas.getActiveObjects();
+        if (activeObjects.length !== 1) {
+            toast({
+                title: "Select one shape",
+                description: "Please select exactly one line or polygon.",
+            });
+            return;
+        }
+        const obj = activeObjects[0];
+        if (obj.type !== "line" && obj.type !== "polygon") {
+            toast({
+                title: "Invalid selection",
+                description: "Only lines and polygons can have metadata.",
+            });
+            return;
+        }
+        openMetadataModal(obj);
+    };
     // ───────────────────────────────────────────────
     // Saving shape data
     // ───────────────────────────────────────────────
@@ -731,8 +775,8 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         if (!fabricRef.current || !measurementId) return;
 
         const canvas = fabricRef.current;
-        const naturalWidth = imageDimensions.naturalWidth;
-        const naturalHeight = imageDimensions.naturalHeight;
+        const naturalWidth = imageDimensionsRef.current.naturalWidth;
+        const naturalHeight = imageDimensionsRef.current.naturalHeight;
         const canvasWidth = canvas.getWidth();
         const canvasHeight = canvas.getHeight();
 
@@ -748,6 +792,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             const label = (obj as any).label || "";
             const surfaceType = (obj as any).surface_type || "custom";
             const wastePercentage = (obj as any).waste_percentage ?? 0;
+            const magnitude = (obj as any).associatedText.text || "";
 
             if (obj.type === "line") {
                 const coords = obj.getCoords();
@@ -783,6 +828,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 label,
                 surface_type: surfaceType,
                 waste_percentage: wastePercentage,
+                magnitude,
                 points,
                 id: (obj as any).id,
             };
@@ -805,7 +851,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     };
 
     const autosave = () => {
-        console.log("----autosave!!!");
+        // console.log("----autosave!!!");
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
         }
@@ -858,8 +904,23 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         });
         fabricRef.current = canvas;
 
-        canvas.on("selection:created", () => setHasSelection(true));
-        canvas.on("selection:updated", () => setHasSelection(true));
+        canvas.on("selection:created", (e) => {
+            const selected = e.selected?.[0];
+            if (selected && (selected as any).belongsTo) {
+                setHasSelection(false);
+            } else {
+                setHasSelection(true);
+            }
+        });
+
+        canvas.on("selection:updated", (e) => {
+            const selected = e.selected?.[0];
+            if (selected && (selected as any).belongsTo) {
+                setHasSelection(false);
+            } else {
+                setHasSelection(true);
+            }
+        });
         canvas.on("selection:cleared", () => setHasSelection(false));
 
         canvas.on("mouse:down", handlePointerDown);
@@ -1238,14 +1299,21 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                         cornerStyle: "circle",
                     });
                     (line as any).id = shape.id || crypto.randomUUID();
+                    (line as any).surface_type = shape.surface_type || "custom";
+                    (line as any).label = shape.label || "";
+                    (line as any).waste_percentage = shape.waste_percentage ?? 0;
 
-                    ["tl", "tr", "bl", "br", "mt", "mb"].forEach((key) => {
+                    ["tl", "tr", "bl", "br", "mt", "mb", "mtr"].forEach((key) => {
                         line.setControlVisible(key, false);
                     });
 
-                    const text = new fabric.IText(shape.label || "0.00 ft", {
-                        fontSize: 14,
-                        fill: "red",
+                    (line as any).label = shape.label || "";
+                    const text = new fabric.IText(shape.magnitude || "0.00 ft", {
+                        fontSize: FONT_SIZE,
+                        fontWeight: FONT_WEIGHT,
+                        fill: FONT_COLOR,
+                        stroke: FONT_STROKE,
+                        strokeWidth: STROKE_WIDTH,
                         selectable: false,
                         evented: false,
                     });
@@ -1291,6 +1359,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                         });
 
                     const onLineChanged = () => {
+                        line.setCoords();
                         updateText();
                         syncLinePoints(line, canvas);
                         autosave();
@@ -1302,6 +1371,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     line.on("rotating", onLineChanged);
 
                     canvas.add(line, text); // , label_, type_);
+                    line.setCoords();
                     const vertexCircles = createLineVertexPoints(
                         line,
                         canvas,
@@ -1325,6 +1395,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                         cornerColor: "red",
                         cornerStrokeColor: "red",
                         transparentCorners: true,
+                        lockRotation: true,
                     });
                     polygon.set({
                         originX: "left",
@@ -1332,10 +1403,16 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                         cornerStyle: "circle",
                     });
                     (polygon as any).id = shape.id || crypto.randomUUID();
-
-                    const text = new fabric.IText(shape.label || "0.00 sq ft", {
-                        fontSize: 14,
-                        fill: "red",
+                    polygon.setControlVisible("mtr", false);
+                    (polygon as any).surface_type = shape.surface_type || "custom";
+                    (polygon as any).label = shape.label || "";
+                    (polygon as any).waste_percentage = shape.waste_percentage ?? 0;
+                    const text = new fabric.IText(shape.magnitude || "0.00 sq ft", {
+                        fontSize: FONT_SIZE,
+                        fontWeight: FONT_WEIGHT,
+                        fill: FONT_COLOR,
+                        stroke: FONT_STROKE,
+                        strokeWidth: STROKE_WIDTH,
                         selectable: false,
                         evented: false,
                     });
@@ -1402,31 +1479,19 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
                     (polygon as any).updateTextFn = updatePolygonText;
 
-                    polygon.on("moving", () => {
+                    const onPolygonChanged = () => {
+                        polygon.setCoords();
                         updatePolygonText();
                         syncVertexCircles(polygon, canvas);
                         autosave();
-                    });
+                    };
 
-                    polygon.on("scaling", () => {
-                        updatePolygonText();
-                        syncVertexCircles(polygon, canvas);
-                        autosave();
-                    });
-
-                    polygon.on("modified", () => {
-                        updatePolygonText();
-                        syncVertexCircles(polygon, canvas);
-                        autosave();
-                    });
-
-                    polygon.on("rotating", () => {
-                        updatePolygonText();
-                        syncVertexCircles(polygon, canvas);
-                        autosave();
-                    });
+                    polygon.on("moving", onPolygonChanged);
+                    polygon.on("scaling", onPolygonChanged);
+                    polygon.on("modified", onPolygonChanged);
 
                     canvas.add(polygon, text); //, label_, type_);
+                    polygon.setCoords();
                     updatePolygonText();
 
                     const vertexCircles: fabric.Circle[] = [];
@@ -1535,7 +1600,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     <button
                         onClick={() => {
                             setIsMagnifierActive((prev) => {
-                                console.log("---set is magnifier actinv: ", prev);
+                                // console.log("---set is magnifier actinv: ", prev);
                                 if (prev) {
                                     magnifierRef.current?.hide();
                                 }
@@ -1546,33 +1611,15 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     >
                         🔍 Magnify
                     </button>
-                    {/*<button*/}
-                    {/*    type="button"*/}
-                    {/*    className="btn btn-outline"*/}
-                    {/*    onClick={() => {*/}
-                    {/*        const canvas = fabricRef.current;*/}
-                    {/*        if (!canvas) return;*/}
-                    {/*        const activeObjects = canvas.getActiveObjects();*/}
-                    {/*        if (activeObjects.length !== 1) {*/}
-                    {/*            toast({*/}
-                    {/*                title: "Select one shape",*/}
-                    {/*                description: "Please select exactly one line or polygon.",*/}
-                    {/*            });*/}
-                    {/*            return;*/}
-                    {/*        }*/}
-                    {/*        const obj = activeObjects[0];*/}
-                    {/*        if (obj.type !== "line" && obj.type !== "polygon") {*/}
-                    {/*            toast({*/}
-                    {/*                title: "Invalid selection",*/}
-                    {/*                description: "Only lines and polygons can have metadata.",*/}
-                    {/*            });*/}
-                    {/*            return;*/}
-                    {/*        }*/}
-                    {/*        // openMetadataModal(obj);*/}
-                    {/*    }}*/}
-                    {/*>*/}
-                    {/*    Edit Metadata*/}
-                    {/*</button>*/}
+                    {activeTool === "select" && hasSelection && (
+                        <button
+                            type="button"
+                            className="btn btn-outline"
+                            onClick={handleEditMetadata}
+                        >
+                            Edit Metadata
+                        </button>
+                    )}
                 </div>
 
                 {scale !== null && (
@@ -1581,64 +1628,74 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             </div>
 
             <div ref={canvasWrapperRef} className="relative border shadow-md w-full h-[70vh]">
-                <canvas ref={canvasRef} />
-                <div className="absolute top-4 left-4 z-10 bg-black/70 backdrop-blur rounded-lg p-2 flex gap-2">
-                    <button
-                        type="button"
-                        className={`btn btn-sm ${activeTool === "select" ? "btn-danger" : "btn-outline"}`}
-                        onClick={() => {
-                            setActiveTool("select");
-                            startPointRef.current = null;
-                            polygonPointsRef.current = [];
-                            setPolygonPointCount(0);
-                        }}
-                    >
-                        Select
-                    </button>
+                <div className="relative border shadow-md w-full h-[70vh]">
+                    <canvas ref={canvasRef} />
+                    <div className="absolute top-4 left-4 z-10 bg-black/70 backdrop-blur rounded-lg p-2 flex gap-2">
+                        <button
+                            type="button"
+                            className={`btn btn-sm ${activeTool === "select" ? "btn-danger" : "btn-outline"}`}
+                            onClick={() => {
+                                setActiveTool("select");
+                                startPointRef.current = null;
+                                polygonPointsRef.current = [];
+                                setPolygonPointCount(0);
+                            }}
+                        >
+                            Select
+                        </button>
 
-                    <button
-                        type="button"
-                        className={`btn btn-sm ${activeTool === "line" ? "btn-danger" : "btn-outline"}`}
-                        onClick={() => {
-                            setActiveTool("line");
-                        }}
-                    >
-                        Line
-                    </button>
+                        <button
+                            type="button"
+                            className={`btn btn-sm ${activeTool === "line" ? "btn-danger" : "btn-outline"}`}
+                            onClick={() => {
+                                setActiveTool("line");
+                            }}
+                        >
+                            Line
+                        </button>
 
-                    <button
-                        type="button"
-                        className={`btn btn-sm ${activeTool === "polygon" ? "btn-danger" : "btn-outline"}`}
-                        onClick={() => {
-                            setActiveTool("polygon");
-                        }}
-                    >
-                        Polygon
-                    </button>
-                    <div className="flex items-center gap-2 text-sm text-gray-300">
-                        {saveStatus === "saving" && <span>Saving…</span>}
-                        {saveStatus === "saved" && <span className="text-green-400">Saved</span>}
-                        {saveStatus === "error" && (
-                            <span className="text-red-400">Save failed</span>
+                        <button
+                            type="button"
+                            className={`btn btn-sm ${activeTool === "polygon" ? "btn-danger" : "btn-outline"}`}
+                            onClick={() => {
+                                setActiveTool("polygon");
+                            }}
+                        >
+                            Polygon
+                        </button>
+                        <div className="flex items-center gap-2 text-sm text-gray-300">
+                            {saveStatus === "saving" && <span>Saving…</span>}
+                            {saveStatus === "saved" && (
+                                <span className="text-green-400">Saved</span>
+                            )}
+                            {saveStatus === "error" && (
+                                <span className="text-red-400">Save failed</span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
+                        {activeTool === "polygon" && polygonPointCount >= 3 && (
+                            <button className="btn btn-danger shadow-lg" onClick={finalizePolygon}>
+                                Finish Polygon
+                            </button>
+                        )}
+
+                        {activeTool === "select" && hasSelection && (
+                            <button
+                                className="btn btn-outline btn-error shadow-lg"
+                                onClick={handleDeleteSelected}
+                            >
+                                Delete
+                            </button>
                         )}
                     </div>
                 </div>
-                <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
-                    {activeTool === "polygon" && polygonPointCount >= 3 && (
-                        <button className="btn btn-danger shadow-lg" onClick={finalizePolygon}>
-                            Finish Polygon
-                        </button>
-                    )}
-
-                    {activeTool === "select" && hasSelection && (
-                        <button
-                            className="btn btn-outline btn-error shadow-lg"
-                            onClick={handleDeleteSelected}
-                        >
-                            Delete
-                        </button>
-                    )}
-                </div>
+                <MeasurementLegend
+                    items={legendItems}
+                    onSelect={selectShapeById}
+                    isExpanded={isLegendExpanded}
+                    onToggle={() => setIsLegendExpanded(!isLegendExpanded)}
+                />
             </div>
 
             {editingMetadata && (

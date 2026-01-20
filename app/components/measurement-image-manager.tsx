@@ -10,6 +10,7 @@ import ConfirmDialog from "@/app/components/ui/confirm-dialog";
 const MAX_FILES = 20;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ACCEPTED_TYPES = ["image/jpeg", "image/png"];
+const FONT_SIZE = 100;
 
 interface MeasurementImage {
     id: number;
@@ -86,6 +87,7 @@ export default function MeasurementImageManager({
                 .from("measurement_images")
                 .select("*")
                 .eq("measurement_session_id", measurementId)
+                .order("is_base_image", { ascending: false })
                 .order("created_at", { ascending: false });
 
             if (error || cancelled) return;
@@ -458,16 +460,35 @@ export default function MeasurementImageManager({
                                                         shape.points.length === 2
                                                     ) {
                                                         const [p1, p2] = shape.points;
+                                                        const midX = (p1.x + p2.x) / 2;
+                                                        const midY = (p1.y + p2.y) / 2;
+
                                                         return (
-                                                            <line
-                                                                key={`shape-${idx}`}
-                                                                x1={p1.x}
-                                                                y1={p1.y}
-                                                                x2={p2.x}
-                                                                y2={p2.y}
-                                                                stroke="red"
-                                                                strokeWidth={2 * scaleRatio}
-                                                            />
+                                                            <g key={`shape-${idx}`}>
+                                                                <line
+                                                                    x1={p1.x}
+                                                                    y1={p1.y}
+                                                                    x2={p2.x}
+                                                                    y2={p2.y}
+                                                                    stroke="red"
+                                                                    strokeWidth={2 * scaleRatio}
+                                                                />
+                                                                <text
+                                                                    x={midX}
+                                                                    y={midY - 8}
+                                                                    textAnchor="middle"
+                                                                    fill="white"
+                                                                    fontSize={
+                                                                        FONT_SIZE / scaleRatio
+                                                                    }
+                                                                    fontWeight="bold"
+                                                                    paintOrder="stroke"
+                                                                    stroke="black"
+                                                                    strokeWidth={0.5}
+                                                                >
+                                                                    {shape.magnitude || "0.00 ft"}
+                                                                </text>
+                                                            </g>
                                                         );
                                                     }
 
@@ -478,14 +499,43 @@ export default function MeasurementImageManager({
                                                         const pointsStr = shape.points
                                                             .map((p: any) => `${p.x},${p.y}`)
                                                             .join(" ");
+                                                        const centroidX =
+                                                            shape.points.reduce(
+                                                                (sum: number, p: any) => sum + p.x,
+                                                                0,
+                                                            ) / shape.points.length;
+                                                        const centroidY =
+                                                            shape.points.reduce(
+                                                                (sum: number, p: any) => sum + p.y,
+                                                                0,
+                                                            ) / shape.points.length;
+
                                                         return (
-                                                            <polygon
-                                                                key={`shape-${idx}`}
-                                                                points={pointsStr}
-                                                                fill="rgba(255, 0, 0, 0.2)"
-                                                                stroke="red"
-                                                                strokeWidth={2 * scaleRatio}
-                                                            />
+                                                            <g key={`shape-${idx}`}>
+                                                                <polygon
+                                                                    points={pointsStr}
+                                                                    fill="rgba(255, 0, 0, 0.2)"
+                                                                    stroke="red"
+                                                                    strokeWidth={2 * scaleRatio}
+                                                                />
+                                                                <text
+                                                                    x={centroidX}
+                                                                    y={centroidY}
+                                                                    textAnchor="middle"
+                                                                    dominantBaseline="middle"
+                                                                    fill="white"
+                                                                    fontSize={
+                                                                        FONT_SIZE / scaleRatio
+                                                                    }
+                                                                    fontWeight="bold"
+                                                                    paintOrder="stroke"
+                                                                    stroke="black"
+                                                                    strokeWidth={0.5}
+                                                                >
+                                                                    {shape.magnitude ||
+                                                                        "0.00 sq ft"}
+                                                                </text>
+                                                            </g>
                                                         );
                                                     }
 

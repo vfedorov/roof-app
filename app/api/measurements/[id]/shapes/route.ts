@@ -26,8 +26,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             measurement_session_id: id,
             shape_type: shape.shape_type,
             label: shape.label || "",
-            surface_type: shape.type || "other",
+            surface_type: shape.surface_type || "other",
             waste_percentage: shape.waste_percentage ?? 0,
+            magnitude: shape.magnitude,
             points: shape.points,
         }));
 
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
                 label,
                 surface_type,
                 waste_percentage,
+                magnitude,
                 points,
                 created_at,
                 updated_at

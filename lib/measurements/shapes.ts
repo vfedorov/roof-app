@@ -132,7 +132,6 @@ export const createLineVertexPoints = (
             hasControls: false,
             hoverCursor: "pointer",
         });
-        console.log("circle (", pointX, ":", pointY, ")");
 
         circle.set({
             originX: "center",
@@ -164,7 +163,6 @@ const setupLinePointHandlers = (
     autosave: () => void,
 ) => {
     circle.on("moving", (e) => {
-        console.log("moving line");
         e.e?.stopPropagation?.();
 
         const lineObj = (circle as any).belongsTo as fabric.Line;

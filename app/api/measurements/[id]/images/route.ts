@@ -86,6 +86,7 @@ export async function GET(request: NextRequest, context: any) {
         .from("measurement_images")
         .select("*")
         .eq("measurement_session_id", id)
+        .order("is_base_image", { ascending: false })
         .order("created_at", { ascending: false });
 
     if (error) {

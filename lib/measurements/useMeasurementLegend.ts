@@ -129,9 +129,7 @@ export const TYPE_COLORS: Record<string, string> = {
 };
 
 export function hexToRgba(hex: string, alpha: number): string {
-    // Убираем #, если есть
     const cleanHex = hex.replace(/^#/, "");
-    // Обрабатываем короткие (#abc) и длинные (#aabbcc) форматы
     const r = parseInt(
         cleanHex.length === 3 ? cleanHex[0] + cleanHex[0] : cleanHex.slice(0, 2),
         16,

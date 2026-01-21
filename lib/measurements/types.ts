@@ -24,3 +24,12 @@ export interface Measurement {
     notes: string | null;
     users?: User | null;
 }
+
+export interface MeasurementShape {
+    id: string;
+    surface_type: SurfaceType;
+    geometry: "line" | "polygon";
+    areaSqFt?: number; // polygon only
+    lengthFt?: number; // line only
+    wastePercent?: number;
+}

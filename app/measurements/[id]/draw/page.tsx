@@ -23,6 +23,7 @@ import {
     useMeasurementLegend,
 } from "@/lib/measurements/useMeasurementLegend";
 import MeasurementLegend from "@/app/components/MeasurementLegend";
+import { MeasurementSummaryPanel } from "@/app/components/MeasurementSummaryPanel";
 
 const FONT_SIZE = 20;
 const FONT_COLOR = "#C0C0C0";
@@ -70,6 +71,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
     const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [isLegendExpanded, setIsLegendExpanded] = useState(false);
+    const [workingAreaShapes, setWorkingAreaShapes] = useState<any[]>([]);
 
     const [editingMetadata, setEditingMetadata] = useState<{
         id: string;
@@ -152,6 +154,42 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             default:
                 return 0;
         }
+    };
+
+    const serializeWorkingShapes = (): any[] => {
+        if (!fabricRef.current) return [];
+
+        const objects = fabricRef.current
+            .getObjects()
+            .filter(
+                (obj) => (obj.type === "line" || obj.type === "polygon") && !(obj as any).isTemp,
+            );
+
+        return objects.map((obj) => {
+            let areaSqFt: number | undefined;
+            let lengthFt: number | undefined;
+
+            const magnitudeText = (obj as any).associatedText?.text || "";
+            const match = magnitudeText.match(/^([\d.]+)\s*(.+)$/);
+            if (match) {
+                const numericValue = parseFloat(match[1]);
+                if (obj.type === "polygon") {
+                    areaSqFt = numericValue;
+                } else if (obj.type === "line") {
+                    lengthFt = numericValue;
+                }
+            }
+
+            return {
+                id: (obj as any).id,
+                surface_type: (obj as any).surface_type || "custom",
+                geometry: obj.type,
+                wastePercent:
+                    (obj as any).waste_percentage ?? getDefaultWaste((obj as any).surface_type),
+                areaSqFt,
+                lengthFt,
+            };
+        });
     };
     // ───────────────────────────────────────────────
     // Handler for Metadata
@@ -701,6 +739,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
         // Removing the selection
         canvas.discardActiveObject();
+        autosave();
         canvas.renderAll();
     };
 
@@ -818,6 +857,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         saveTimeoutRef.current = setTimeout(() => {
             try {
                 saveShapesLocally(true);
+                setWorkingAreaShapes(serializeWorkingShapes());
                 setSaveStatus("saved");
             } catch (e) {
                 console.error("Autosave failed", e);
@@ -1410,6 +1450,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             });
 
             canvas.renderAll();
+            setWorkingAreaShapes(serializeWorkingShapes());
         };
 
         loadShapes();
@@ -1543,6 +1584,8 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     onToggle={() => setIsLegendExpanded(!isLegendExpanded)}
                 />
             </div>
+
+            <MeasurementSummaryPanel shapes={workingAreaShapes} />
 
             {editingMetadata && (
                 <ShapeMetadataModal

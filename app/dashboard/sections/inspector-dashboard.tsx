@@ -97,19 +97,23 @@ export default async function InspectorDashboard({ userId }: { userId: string })
                 ))}
             </div>
 
-            <h2 className="text-xl font-semibold mb-3">Measurements</h2>
-            <div className="space-y-3">
-                {measurements?.map((p) => (
-                    <Link
-                        key={p.id}
-                        href={`/measurements/${p.id}`}
-                        className="block border p-4 rounded"
-                    >
-                        {p.properties?.name ?? "Nothing here"} {" - "}
-                        {new Date(p.date).toLocaleDateString()}
-                    </Link>
-                ))}
-            </div>
+            {measurements && measurements.length > 0 && (
+                <>
+                    <h2 className="text-xl font-semibold mb-3">Measurements</h2>
+                    <div className="space-y-3">
+                        {measurements.map((p) => (
+                            <Link
+                                key={p.id}
+                                href={`/measurements/${p.id}`}
+                                className="block border p-4 rounded"
+                            >
+                                {p.properties?.name ?? "Nothing here"} {" - "}
+                                {new Date(p.date).toLocaleDateString()}
+                            </Link>
+                        ))}
+                    </div>
+                </>
+            )}
         </div>
     );
 }

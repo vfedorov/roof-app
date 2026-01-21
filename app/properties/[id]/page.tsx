@@ -17,6 +17,15 @@ export default async function PropertyDetailPage({ params }: PageProps<"/propert
 
     if (!property) return <div>Property not found</div>;
 
+    let visibleMeasurements = [];
+    if (user.role === USER_ROLES.ADMIN) {
+        visibleMeasurements = measurements || [];
+    } else {
+        visibleMeasurements = (measurements || []).filter(
+            (session) => session.created_by === user.id,
+        );
+    }
+
     return (
         <div className="form-control">
             <h1 className="form-title">{property.name}</h1>
@@ -37,11 +46,11 @@ export default async function PropertyDetailPage({ params }: PageProps<"/propert
                 <div>
                     <strong>Notes:</strong> {property.notes}
                 </div>
-                {measurements && measurements.length > 0 && (
+                {visibleMeasurements && visibleMeasurements.length > 0 && (
                     <>
                         <h2 className="text-xl font-semibold mb-3">Measurements</h2>
                         <div className="space-y-3">
-                            {measurements.map((p) => (
+                            {visibleMeasurements.map((p) => (
                                 <Link
                                     key={p.id}
                                     href={`/measurements/${p.id}`}

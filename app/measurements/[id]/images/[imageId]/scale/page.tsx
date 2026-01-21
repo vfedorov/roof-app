@@ -117,6 +117,11 @@ export default function SetScalePage({
                 <button onClick={() => router.back()} className="btn">
                     ← Back
                 </button>
+                <p className="text-base text-gray-300 max-w-md">
+                    Step 1: Tap two known points.
+                    <br />
+                    Step 2: Enter their actual length in feet and inches.
+                </p>
             </div>
 
             {/* Image with overlay */}

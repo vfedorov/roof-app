@@ -1,5 +1,5 @@
 import React from "react";
-import { LegendItem } from "@/lib/measurements/useMeasurementLegend";
+import { LegendItem, TYPE_COLORS } from "@/lib/measurements/useMeasurementLegend";
 
 interface MeasurementLegendProps {
     items: LegendItem[];
@@ -7,17 +7,6 @@ interface MeasurementLegendProps {
     isExpanded: boolean;
     onToggle: () => void;
 }
-
-const TYPE_COLORS: Record<string, string> = {
-    "roof area": "#FF6B6B",
-    "roof damage": "#FF9F43",
-    "siding area": "#4ECDC4",
-    "siding damage": "#FF6B9D",
-    trim: "#45B7D1",
-    ridge: "#96CEB4",
-    eave: "#FFEAA7",
-    other: "#A0A0A0",
-};
 
 const MeasurementLegend: React.FC<MeasurementLegendProps> = ({
     items,
@@ -51,11 +40,14 @@ const MeasurementLegend: React.FC<MeasurementLegendProps> = ({
                                 className="w-3 h-3 rounded-full"
                                 style={{ backgroundColor: TYPE_COLORS[item.surfaceType] || "#888" }}
                             ></span>
-                            <div className="text-base">
+                            <div className="text-base flex-1">
                                 <div className="font-medium">
                                     {item.displayName} ({item.surfaceType})
                                 </div>
-                                <div className="text-gray-400">{item.value}</div>
+                                <div className="text-gray-400 text-sm">Net: {item.valueNet}</div>
+                                <div className="text-gray-300 text-sm">
+                                    Gross: {item.valueGross}
+                                </div>
                             </div>
                         </div>
                     ))}

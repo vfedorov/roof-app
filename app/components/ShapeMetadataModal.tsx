@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { SURFACE_TYPES, SurfaceType } from "@/lib/measurements/types";
+import { SurfaceType } from "@/lib/measurements/types";
+import { getDefaultWastePercentage } from "@/lib/measurements/shapes";
 
 interface ShapeMetadata {
     label: string;
@@ -12,22 +13,46 @@ interface ShapeMetadata {
 interface ShapeMetadataModalProps {
     isOpen: boolean;
     initialData: ShapeMetadata;
+    geometryType: "line" | "polygon";
     onSave: (data: ShapeMetadata) => void;
     onCancel: () => void;
 }
 
+const getAvailableSurfaceTypes = (geometryType: "line" | "polygon"): SurfaceType[] => {
+    if (geometryType === "line") {
+        return ["trim", "ridge", "eave", "other"] as SurfaceType[];
+    } else {
+        return [
+            "roof area",
+            "roof damage",
+            "siding area",
+            "siding damage",
+            "other",
+        ] as SurfaceType[];
+    }
+};
+
 export default function ShapeMetadataModal({
     isOpen,
     initialData,
+    geometryType,
     onSave,
     onCancel,
 }: ShapeMetadataModalProps) {
     const [formData, setFormData] = useState<ShapeMetadata>(initialData);
-
-    if (!isOpen) return null;
+    const availableTypes = getAvailableSurfaceTypes(geometryType);
 
     const handleChange = (field: keyof ShapeMetadata, value: any) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const handleSurfaceTypeChange = (newType: SurfaceType) => {
+        const defaultWaste = getDefaultWastePercentage(newType);
+        setFormData((prev) => ({
+            ...prev,
+            surface_type: newType,
+            waste_percentage: defaultWaste,
+        }));
     };
 
     const handleSave = () => {
@@ -37,6 +62,8 @@ export default function ShapeMetadataModal({
         }
         onSave(formData);
     };
+
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -58,11 +85,9 @@ export default function ShapeMetadataModal({
                         <select
                             className="w-full border rounded px-3 py-2"
                             value={formData.surface_type}
-                            onChange={(e) =>
-                                handleChange("surface_type", e.target.value as SurfaceType)
-                            }
+                            onChange={(e) => handleSurfaceTypeChange(e.target.value as SurfaceType)}
                         >
-                            {SURFACE_TYPES.map((type) => (
+                            {availableTypes.map((type) => (
                                 <option key={type} value={type}>
                                     {type}
                                 </option>

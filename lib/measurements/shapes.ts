@@ -267,3 +267,22 @@ export const removeLinePoints = (line: fabric.Object, canvas: fabric.Canvas) => 
         }
     });
 };
+
+export function getDefaultWastePercentage(shapeType: string): number {
+    switch (shapeType) {
+        case "roof area":
+            return 10;
+        case "siding area":
+            return 15;
+        case "trim":
+        case "ridge":
+        case "eave":
+            return 15;
+        case "roof damage":
+        case "siding damage":
+            return 10;
+        case "other":
+        default:
+            return 10;
+    }
+}

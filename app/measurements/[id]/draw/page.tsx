@@ -17,7 +17,11 @@ import {
 } from "@/lib/measurements/shapes";
 import { createMagnifier } from "@/lib/measurements/magnifier";
 import { updateLineLength } from "@/lib/measurements/lineGeometry";
-import { useMeasurementLegend } from "@/lib/measurements/useMeasurementLegend";
+import {
+    hexToRgba,
+    TYPE_COLORS,
+    useMeasurementLegend,
+} from "@/lib/measurements/useMeasurementLegend";
 import MeasurementLegend from "@/app/components/MeasurementLegend";
 
 const FONT_SIZE = 20;
@@ -69,6 +73,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
     const [editingMetadata, setEditingMetadata] = useState<{
         id: string;
+        geometryType: "line" | "polygon";
         label: string;
         surface_type: SurfaceType;
         waste_percentage: number;
@@ -126,11 +131,12 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         const id = (shape as any).id;
         if (!id || !fabricRef.current) return;
         const label = (shape as any).label || "";
+        const geometryType = shape.type === "line" ? "line" : "polygon";
         const surface_type =
             (shape as any).surface_type || (shape.type === "line" ? "ridge" : "roof area");
         const waste_percentage = (shape as any).waste_percentage ?? getDefaultWaste(surface_type);
 
-        setEditingMetadata({ id, label, surface_type, waste_percentage });
+        setEditingMetadata({ id, geometryType, label, surface_type, waste_percentage });
     };
 
     const getDefaultWaste = (type: string): number => {
@@ -178,7 +184,20 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         }
 
         setEditingMetadata(null);
+        const surface_t = (shape as any).surface_type as string;
+        const strokeColor =
+            surface_t && typeof surface_t === "string" && surface_t in TYPE_COLORS
+                ? TYPE_COLORS[surface_t]
+                : "red";
+        shape.set({ stroke: strokeColor });
+        if (shape.type === "polygon") {
+            const fillColor = hexToRgba(strokeColor, 0.2);
+            shape.set({ fill: fillColor });
+        }
+
+        fabricRef.current.renderAll();
         autosave();
+
         toast({ title: "Saved", description: "Shape metadata updated." });
     };
 
@@ -331,31 +350,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 originY: "bottom",
             });
 
-            // const label_ = new fabric.IText("", {
-            //     fontSize: 14,
-            //     fill: "red",
-            //     selectable: false,
-            //     evented: false,
-            // });
-            // label_.set({
-            //     originX: "center",
-            //     originY: "bottom",
-            // });
-            //
-            // const type_ = new fabric.IText("", {
-            //     fontSize: 14,
-            //     fill: "red",
-            //     selectable: false,
-            //     evented: false,
-            // });
-            // type_.set({
-            //     originX: "center",
-            //     originY: "bottom",
-            // });
-
             (line as any).associatedText = text;
-            // (line as any).associatedLabel = label_;
-            // (line as any).associatedType = type_;
 
             // Update length and position
             const updateText = () =>
@@ -466,7 +461,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 canvas.add(tempPolygon);
 
                 // Calculating the area for a temporary polygon
-                // const areaSqFt = calculatePolygonArea(polygonPointsRef.current);
                 const areaSqFt = calculatePolygonArea(
                     tempPolygon,
                     scaleRef.current,
@@ -568,36 +562,10 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             originY: "bottom",
         });
 
-        // const label_ = new fabric.IText("", {
-        //     fontSize: 14,
-        //     fill: "red",
-        //     selectable: false,
-        //     evented: false,
-        // });
-        // label_.set({
-        //     originX: "center",
-        //     originY: "bottom",
-        // });
-        //
-        // const type_ = new fabric.IText("", {
-        //     fontSize: 14,
-        //     fill: "red",
-        //     selectable: false,
-        //     evented: false,
-        // });
-        // type_.set({
-        //     originX: "center",
-        //     originY: "bottom",
-        // });
-
         (finalPolygon as any).associatedText = text;
-        // (finalPolygon as any).associatedLabel = label_;
-        // (finalPolygon as any).associatedType = type_;
 
         const center = finalPolygon.getCenterPoint();
         text.set({ left: center.x, top: center.y });
-        // label_.set({ left: center.x, top: center.y - 30 });
-        // type_.set({ left: center.x, top: center.y - 15 });
 
         const updatePolygonText = () => {
             const newArea = calculatePolygonArea(
@@ -613,14 +581,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                 left: newCenter.x,
                 top: newCenter.y,
             });
-            // label_.set({
-            //     left: newCenter.x,
-            //     top: newCenter.y - 30,
-            // });
-            // type_.set({
-            //     left: newCenter.x,
-            //     top: newCenter.y - 15,
-            // });
             canvas.renderAll();
         };
         (finalPolygon as any).updateTextFn = updatePolygonText;
@@ -636,7 +596,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         finalPolygon.on("scaling", onPolygonChanged);
         finalPolygon.on("modified", onPolygonChanged);
 
-        canvas.add(finalPolygon, text); // , label_, type_);
+        canvas.add(finalPolygon, text);
         finalPolygon.setCoords();
         const vertexCircles: fabric.Circle[] = [];
 
@@ -685,9 +645,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
                 // Перерисовываем полигон
                 updatePolygonText();
-                // poly.set({ dirty: true });
-                // poly.setCoords();
-                // poly.setBoundingBox();
                 updatePolygonBoundingBox(poly);
                 canvas.renderAll();
 
@@ -1026,63 +983,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
 
                     canvas.add(scaleLine, circle1, circle2);
                 }
-                // const shapes = canvas
-                //     .getObjects()
-                //     .filter(
-                //         (obj) =>
-                //             (obj.type === "line" || obj.type === "polygon") &&
-                //             !(obj as any).isTemp &&
-                //             !(obj as any).isScaleElement,
-                //     );
-                // shapes.forEach((shape) => {
-                //     if (shape.type === "line") {
-                //         const coords = shape.getCoords();
-                //         const p1 = { x: coords[0].x, y: coords[0].y };
-                //         const p2 = { x: coords[1].x, y: coords[1].y };
-                //
-                //         // Пересчёт координат относительно нового масштаба
-                //         const newP1 = {
-                //             x: p1.x, // / imageDimensions.naturalWidth) * wrapperWidth,
-                //             y: p1.y, // / imageDimensions.naturalHeight) * scaledHeight,
-                //         };
-                //         const newP2 = {
-                //             x: p2.x, // / imageDimensions.naturalWidth) * wrapperWidth,
-                //             y: p2.y, // / imageDimensions.naturalHeight) * scaledHeight,
-                //         };
-                //
-                //         // Обновление линии
-                //         const dx = newP2.x - newP1.x;
-                //         const dy = newP2.y - newP1.y;
-                //         const length = Math.sqrt(dx * dx + dy * dy);
-                //         const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-                //
-                //         shape.set({
-                //             left: newP1.x,
-                //             top: newP1.y,
-                //             angle: angle,
-                //         });
-                //
-                //         // Обновление текста
-                //         const text = (shape as any).associatedText;
-                //         if (text) {
-                //             const lineCenterX = (newP1.x + newP2.x) / 2 - 25;
-                //             const lineCenterY = (newP1.y + newP2.y) / 2 - 10;
-                //             text.set({
-                //                 left: lineCenterX,
-                //                 top: lineCenterY,
-                //             });
-                //         }
-                //     } else if (shape.type === "polygon") {
-                //         const points = (shape as fabric.Polygon).points.map((point) => ({
-                //             x: point.x,
-                //             y: point.y,
-                //         }));
-                //
-                //         shape.set({
-                //             points: points,
-                //         });
-                //     }
-                // });
                 canvas.renderAll();
             } else {
                 canvas.setDimensions({ width: wrapperWidth, height: wrapperHeight });
@@ -1272,6 +1172,13 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     x: (p.x / naturalWidth) * canvasWidth,
                     y: (p.y / naturalHeight) * canvasHeight,
                 }));
+
+                const surface_t = (shape as any).surface_type as string;
+                const strokeColor =
+                    surface_t && typeof surface_t === "string" && surface_t in TYPE_COLORS
+                        ? TYPE_COLORS[surface_t]
+                        : "red";
+
                 if (shape.shape_type === "line") {
                     const [p1, p2] = points;
                     const dx = p2.x - p1.x;
@@ -1283,7 +1190,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                         left: p1.x,
                         top: p1.y,
                         angle: angle,
-                        stroke: "red",
+                        stroke: strokeColor,
                         strokeWidth: 4,
                         selectable: true,
                         hasBorders: true,
@@ -1322,31 +1229,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                         originY: "bottom",
                     });
 
-                    // const label_ = new fabric.IText(shape.label || "", {
-                    //     fontSize: 14,
-                    //     fill: "red",
-                    //     selectable: false,
-                    //     evented: false,
-                    // });
-                    // label_.set({
-                    //     originX: "center",
-                    //     originY: "bottom",
-                    // });
-                    //
-                    // const type_ = new fabric.IText(shape.surface_type || "", {
-                    //     fontSize: 14,
-                    //     fill: "red",
-                    //     selectable: false,
-                    //     evented: false,
-                    // });
-                    // type_.set({
-                    //     originX: "center",
-                    //     originY: "bottom",
-                    // });
-
                     (line as any).associatedText = text;
-                    // (line as any).associatedLabel = label_;
-                    // (line as any).associatedType = type_;
 
                     const updateText = () =>
                         updateLineLength({
@@ -1370,7 +1253,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     line.on("modified", onLineChanged);
                     line.on("rotating", onLineChanged);
 
-                    canvas.add(line, text); // , label_, type_);
+                    canvas.add(line, text);
                     line.setCoords();
                     const vertexCircles = createLineVertexPoints(
                         line,
@@ -1385,9 +1268,10 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                     syncLinePoints(line, canvas);
                     updateText();
                 } else if (shape.shape_type === "polygon") {
+                    const fillColor = hexToRgba(strokeColor, 0.2);
                     const polygon = new fabric.Polygon(points, {
-                        fill: "rgba(255, 0, 0, 0.2)",
-                        stroke: "red",
+                        fill: fillColor,
+                        stroke: strokeColor,
                         strokeWidth: 3,
                         selectable: true,
                         hasControls: true,
@@ -1421,36 +1305,10 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                         originY: "bottom",
                     });
 
-                    // const label_ = new fabric.IText(shape.label || "", {
-                    //     fontSize: 14,
-                    //     fill: "red",
-                    //     selectable: false,
-                    //     evented: false,
-                    // });
-                    // label_.set({
-                    //     originX: "center",
-                    //     originY: "bottom",
-                    // });
-                    //
-                    // const type_ = new fabric.IText(shape.surface_type || "", {
-                    //     fontSize: 14,
-                    //     fill: "red",
-                    //     selectable: false,
-                    //     evented: false,
-                    // });
-                    // type_.set({
-                    //     originX: "center",
-                    //     originY: "bottom",
-                    // });
-
                     (polygon as any).associatedText = text;
-                    // (polygon as any).associatedLabel = label_;
-                    // (polygon as any).associatedType = type_;
 
                     const center = polygon.getCenterPoint();
                     text.set({ left: center.x, top: center.y });
-                    // label_.set({ left: center.x, top: center.y - 30 });
-                    // type_.set({ left: center.x, top: center.y - 15 });
 
                     const updatePolygonText = () => {
                         const newArea = calculatePolygonArea(
@@ -1466,14 +1324,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                             left: newCenter.x,
                             top: newCenter.y,
                         });
-                        // label_.set({
-                        //     left: newCenter.x,
-                        //     top: newCenter.y - 30,
-                        // });
-                        // type_.set({
-                        //     left: newCenter.x,
-                        //     top: newCenter.y - 15,
-                        // });
                         canvas.renderAll();
                     };
 
@@ -1542,11 +1392,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
                             poly.points[idx].x = adjustedX;
                             poly.points[idx].y = adjustedY;
 
-                            // Перерисовываем полигон
-                            // poly.set({ dirty: true });
-                            // poly.setCoords();
                             updatePolygonBoundingBox(poly);
-                            // poly.setBoundingBox();
                             canvas.renderAll();
 
                             // Обновляем текст (площадь)
@@ -1701,6 +1547,7 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
             {editingMetadata && (
                 <ShapeMetadataModal
                     isOpen={true}
+                    geometryType={editingMetadata.geometryType}
                     initialData={{
                         label: editingMetadata.label,
                         surface_type: editingMetadata.surface_type,

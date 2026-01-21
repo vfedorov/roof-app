@@ -7,7 +7,8 @@ import { supabase } from "@/lib/supabase/supabase";
 import { useRouter } from "next/navigation";
 import ConfirmDialog from "@/app/components/ui/confirm-dialog";
 import StaticMeasurementLegend from "@/app/components/StaticMeasurementLegend";
-import { LegendItem } from "@/lib/measurements/useMeasurementLegend";
+import { formatWasteValue, LegendItem, TYPE_COLORS } from "@/lib/measurements/useMeasurementLegend";
+import { getDefaultWastePercentage } from "@/lib/measurements/shapes";
 
 const MAX_FILES = 20;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -305,14 +306,31 @@ export default function MeasurementImageManager({
     };
 
     const legendItems: LegendItem[] = useMemo(() => {
-        return shapes.map((shape) => ({
-            id: String(shape.id),
-            surfaceType: shape.surface_type || "other",
-            label: shape.label || "",
-            displayName: shape.label || shape.surface_type || shape.shape_type || "Measurement",
-            value: shape.magnitude || "",
-            shapeType: shape.shape_type as "line" | "polygon",
-        }));
+        return shapes.map((shape) => {
+            const surfaceType = shape.surface_type || "other";
+            const wastePercentage =
+                shape.waste_percentage ?? getDefaultWastePercentage(surfaceType);
+            const shapeType = shape.shape_type as "line" | "polygon";
+
+            // Предполагаем, что shape.magnitude — это строка вида "500.00 sq ft" или "120.50 ft"
+            const rawValueText = shape.magnitude || "";
+
+            const { valueNet, valueGross } = formatWasteValue(
+                rawValueText,
+                wastePercentage,
+                shapeType,
+            );
+
+            return {
+                id: String(shape.id),
+                surfaceType,
+                label: shape.label || "",
+                displayName: shape.label || surfaceType || shapeType || "Measurement",
+                valueNet,
+                valueGross,
+                shapeType,
+            };
+        });
     }, [shapes]);
 
     const baseImage = images.find((i) => i.is_base_image);
@@ -417,6 +435,10 @@ export default function MeasurementImageManager({
                                         imageDimensions[img.id]?.naturalWidth /
                                             imageDimensions[img.id]?.displayedWidth || 1;
 
+                                    const surfaceType = shape.surface_type || "other";
+                                    const strokeColor = TYPE_COLORS[surfaceType] || "#888888";
+                                    const fillColor = `${strokeColor}33`;
+
                                     if (shape.shape_type === "line" && shape.points.length === 2) {
                                         const [p1, p2] = shape.points;
                                         const midX = (p1.x + p2.x) / 2;
@@ -429,7 +451,7 @@ export default function MeasurementImageManager({
                                                     y1={p1.y}
                                                     x2={p2.x}
                                                     y2={p2.y}
-                                                    stroke="red"
+                                                    stroke={strokeColor}
                                                     strokeWidth={2 * scaleRatio}
                                                 />
                                                 <text
@@ -473,8 +495,8 @@ export default function MeasurementImageManager({
                                             <g key={`shape-${idx}`}>
                                                 <polygon
                                                     points={pointsStr}
-                                                    fill="rgba(255, 0, 0, 0.2)"
-                                                    stroke="red"
+                                                    fill={fillColor}
+                                                    stroke={strokeColor}
                                                     strokeWidth={2 * scaleRatio}
                                                 />
                                                 <text

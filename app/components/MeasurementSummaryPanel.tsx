@@ -10,24 +10,49 @@ export const MeasurementSummaryPanel = ({ shapes }: SummaryPanelProps) => {
 
     return (
         <div className="measurement-summary">
-            <h2>
-                <b>Roof</b>
-            </h2>
-            <p>Total Area: {summary.roof.totalAreaSqFt} sq ft</p>
-            <p>Squares: {summary.roof.totalSquares}</p>
+            {summary.roof.totalAreaSqFt > 0 && (
+                <>
+                    <h2>
+                        <b>Roof</b>
+                    </h2>
+                    <p>Total Area: {summary.roof.totalAreaSqFt} sq ft</p>
+                    <p>Squares: {summary.roof.totalSquares}</p>
+                    <hr />
+                </>
+            )}
 
-            <h2>
-                <b>Siding</b>
-            </h2>
-            <p>Total Area: {summary.siding.totalAreaSqFt} sq ft</p>
+            {summary.siding.totalAreaSqFt > 0 && (
+                <>
+                    <h2>
+                        <b>Siding</b>
+                    </h2>
+                    <p>Total Area: {summary.siding.totalAreaSqFt} sq ft</p>
+                    <hr />
+                </>
+            )}
 
-            <h2>
-                <b>Linear Elements</b>
-            </h2>
-            <p>Ridge: {summary.linear.ridge} ft</p>
-            <p>Eave: {summary.linear.eave} ft</p>
-            <p>Trim: {summary.linear.trim} ft</p>
-            {summary.linear.other > 0 && <p>Other: {summary.linear.other} ft</p>}
+            {(summary.linear.ridge > 0 || summary.linear.eave > 0 || summary.linear.trim > 0) && (
+                <>
+                    <hr />
+                    <h2>
+                        <b>Linear Elements</b>
+                    </h2>
+                    {summary.linear.ridge > 0 && <p>Ridge: {summary.linear.ridge} ft</p>}
+                    {summary.linear.eave > 0 && <p>Eave: {summary.linear.eave} ft</p>}
+                    {summary.linear.trim > 0 && <p>Trim: {summary.linear.trim} ft</p>}
+                    <hr />
+                </>
+            )}
+
+            {summary.linear.other > 0 && (
+                <>
+                    <h2>
+                        <b>Other Elements</b>
+                    </h2>
+                    <p>Area: {summary.otherAreaSqFt} ft</p>
+                    <p>Linear: {summary.linear.other} ft</p>
+                </>
+            )}
         </div>
     );
 };

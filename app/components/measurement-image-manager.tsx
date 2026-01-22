@@ -9,6 +9,8 @@ import ConfirmDialog from "@/app/components/ui/confirm-dialog";
 import StaticMeasurementLegend from "@/app/components/StaticMeasurementLegend";
 import { formatWasteValue, LegendItem, TYPE_COLORS } from "@/lib/measurements/useMeasurementLegend";
 import { getDefaultWastePercentage } from "@/lib/measurements/shapes";
+import { MeasurementSummaryPanel } from "@/app/components/MeasurementSummaryPanel";
+import { getDefaultWaste } from "@/lib/measurements/types";
 
 const MAX_FILES = 20;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -48,6 +50,7 @@ export default function MeasurementImageManager({
     const [scalePoints, setScalePoints] = useState<{ x: number; y: number }[]>([]);
     const [scale, setScale] = useState<number | null>(null);
     const [shapes, setShapes] = useState<any[]>([]);
+    const [workingAreaShapes, setWorkingAreaShapes] = useState<any[]>([]);
 
     const router = useRouter();
     const [imageDimensions, setImageDimensions] = useState<ImageDimensions>({});
@@ -78,6 +81,43 @@ export default function MeasurementImageManager({
 
         const data = await res.json();
         setImages(data);
+    };
+
+    const serializeWorkingShapes = (shapesFromLocal?: any[]): any[] => {
+        let objects: any[];
+        if (shapesFromLocal && Array.isArray(shapesFromLocal)) {
+            objects = shapesFromLocal.filter(
+                (obj) => obj.shape_type === "line" || obj.shape_type === "polygon",
+            );
+        } else {
+            return [];
+        }
+
+        return objects.map((obj) => {
+            let areaSqFt: number | undefined;
+            let lengthFt: number | undefined;
+
+            const magnitudeText = obj.magnitude || "";
+            const match = magnitudeText.match(/^([\d.]+)\s*(.+)$/);
+
+            if (match) {
+                const numericValue = parseFloat(match[1]);
+                if (obj.shape_type === "polygon") {
+                    areaSqFt = numericValue;
+                } else if (obj.shape_type === "line") {
+                    lengthFt = numericValue;
+                }
+            }
+
+            return {
+                id: obj.id,
+                surface_type: obj.surface_type || "custom",
+                geometry: obj.shape_type,
+                wastePercent: obj.waste_percentage ?? getDefaultWaste(obj.surface_type),
+                areaSqFt,
+                lengthFt,
+            };
+        });
     };
 
     useEffect(() => {
@@ -115,6 +155,7 @@ export default function MeasurementImageManager({
                     if (localData && allowUpload) {
                         const shapesFromLocal = JSON.parse(localData);
                         setShapes(shapesFromLocal);
+                        setWorkingAreaShapes(serializeWorkingShapes(shapesFromLocal));
                     } else {
                         const shapesRes = await fetch(`/api/measurements/${measurementId}/shapes`);
 
@@ -127,11 +168,13 @@ export default function MeasurementImageManager({
                                 JSON.stringify(shapes),
                             );
                             setShapes(shapes);
+                            setWorkingAreaShapes(serializeWorkingShapes(shapes));
                         }
                     }
                 } catch (error) {
                     console.warn("Failed to load shapes:", error);
                     setShapes([]);
+                    setWorkingAreaShapes(serializeWorkingShapes([]));
                 }
             }
         })();
@@ -312,7 +355,6 @@ export default function MeasurementImageManager({
                 shape.waste_percentage ?? getDefaultWastePercentage(surfaceType);
             const shapeType = shape.shape_type as "line" | "polygon";
 
-            // Предполагаем, что shape.magnitude — это строка вида "500.00 sq ft" или "120.50 ft"
             const rawValueText = shape.magnitude || "";
 
             const { valueNet, valueGross } = formatWasteValue(
@@ -527,18 +569,20 @@ export default function MeasurementImageManager({
                         <div className="flex gap-2 mt-2">
                             {isBase ? (
                                 <>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            router.push(
-                                                `/measurements/${measurementId}/images/${img.id}/scale`,
-                                            );
-                                        }}
-                                        className="flex-1 text-sm border rounded py-1 text-center bg-blue-100 text-blue-700"
-                                    >
-                                        ️📏 Edit Scale
-                                    </button>
+                                    {scale === null && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                router.push(
+                                                    `/measurements/${measurementId}/images/${img.id}/scale`,
+                                                );
+                                            }}
+                                            className="flex-1 text-sm border rounded py-1 text-center bg-blue-100 text-blue-700"
+                                        >
+                                            ️📏 Edit Scale
+                                        </button>
+                                    )}
 
                                     {scale !== null && (
                                         <button
@@ -638,6 +682,15 @@ export default function MeasurementImageManager({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* BASE IMAGE */}
+                    {baseImage && workingAreaShapes.length > 0 && (
+                        <div className="mt-6">
+                            <h2 className="text-xl text-blue-600 font-semibold mb-2">
+                                Measurement Summary
+                            </h2>
+                            <MeasurementSummaryPanel shapes={workingAreaShapes} />
+                        </div>
+                    )}
+
                     {baseImage && renderImageCard(baseImage)}
 
                     {/* LEGEND AS A GRID ITEM */}

@@ -8,7 +8,7 @@ export type MagnifierInstance = {
 
 const MAG_SIZE = 120;
 const SOURCE_SIZE = 40;
-const ZOOM = 3;
+const ZOOM = 4;
 const OFFSET = 60;
 
 export function createMagnifier(
@@ -32,7 +32,7 @@ export function createMagnifier(
 
     function show(x: number, y: number, k: number = 1) {
         const rect = container.getBoundingClientRect();
-
+        const SOURCE_SIZE_L = SOURCE_SIZE * k;
         let left = x / k + OFFSET;
         let top = y / k - OFFSET;
 
@@ -50,8 +50,8 @@ export function createMagnifier(
         const source = fabricCanvas.lowerCanvasEl;
         if (!source) return;
 
-        const sx = Math.max(0, x - SOURCE_SIZE / 2);
-        const sy = Math.max(0, y - SOURCE_SIZE / 2);
+        const sx = Math.max(0, x - SOURCE_SIZE_L / 2);
+        const sy = Math.max(0, y - SOURCE_SIZE_L / 2);
 
         if (!ctx) {
             return;
@@ -63,12 +63,12 @@ export function createMagnifier(
             source,
             sx,
             sy,
-            SOURCE_SIZE,
-            SOURCE_SIZE,
+            SOURCE_SIZE_L * k,
+            SOURCE_SIZE_L * k,
             0,
             0,
-            SOURCE_SIZE * ZOOM,
-            SOURCE_SIZE * ZOOM,
+            SOURCE_SIZE_L * ZOOM,
+            SOURCE_SIZE_L * ZOOM,
         );
 
         canvas.style.display = "block";

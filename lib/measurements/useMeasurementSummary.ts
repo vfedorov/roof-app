@@ -15,6 +15,7 @@ export interface MeasurementSummary {
         trim: number;
         other: number;
     };
+    otherAreaSqFt: number;
 }
 
 const DAMAGE_TYPES = new Set(["roof damage", "siding damage"]);
@@ -28,6 +29,7 @@ export const useMeasurementSummary = (shapes: MeasurementShape[]): MeasurementSu
     return useMemo(() => {
         let roofArea = 0;
         let sidingArea = 0;
+        let otherArea = 0;
 
         const linearTotals = {
             ridge: 0,
@@ -45,6 +47,8 @@ export const useMeasurementSummary = (shapes: MeasurementShape[]): MeasurementSu
                     roofArea += area;
                 } else if (SIDING_AREA_TYPES.has(shape.surface_type)) {
                     sidingArea += area;
+                } else {
+                    otherArea += area;
                 }
             } else if (shape.geometry === "line") {
                 const length = shape.lengthFt ?? 0;
@@ -68,6 +72,7 @@ export const useMeasurementSummary = (shapes: MeasurementShape[]): MeasurementSu
                 trim: parseFloat(linearTotals.trim.toFixed(2)),
                 other: parseFloat(linearTotals.other.toFixed(2)),
             },
+            otherAreaSqFt: parseFloat(otherArea.toFixed(2)),
         };
     }, [shapes]);
 };

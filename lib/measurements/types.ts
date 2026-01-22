@@ -29,7 +29,22 @@ export interface MeasurementShape {
     id: string;
     surface_type: SurfaceType;
     geometry: "line" | "polygon";
-    areaSqFt?: number; // polygon only
-    lengthFt?: number; // line only
+    areaSqFt?: number;
+    lengthFt?: number;
     wastePercent?: number;
 }
+
+export const getDefaultWaste = (type: string): number => {
+    switch (type) {
+        case "roof area":
+            return 10;
+        case "siding area":
+            return 15;
+        case "trim":
+        case "ridge":
+        case "eave":
+            return 15;
+        default:
+            return 0;
+    }
+};

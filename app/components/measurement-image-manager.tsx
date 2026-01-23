@@ -301,7 +301,8 @@ export default function MeasurementImageManager({
                 is_base_image: i.id === confirmBaseImage.id,
             })),
         );
-
+        setWorkingAreaShapes([]);
+        setShapes([]);
         setConfirmBaseImage(null);
     };
 
@@ -681,16 +682,20 @@ export default function MeasurementImageManager({
                 {images.length === 0 && <p className="text-gray-500">No images uploaded yet.</p>}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* BASE IMAGE */}
-                    {baseImage && workingAreaShapes.length > 0 && (
-                        <div className="mt-6">
-                            <h2 className="text-xl text-blue-600 font-semibold mb-2">
-                                Measurement Summary
-                            </h2>
-                            <MeasurementSummaryPanel shapes={workingAreaShapes} />
-                        </div>
-                    )}
+                    <div className="mt-6">
+                        <h2 className="text-xl text-blue-600 font-semibold mb-2">
+                            Measurement Summary
+                        </h2>
+                        {!baseImage && (
+                            <p>
+                                There is no data for a summary measurement report because the base
+                                image is not set.
+                            </p>
+                        )}
+                        {baseImage && <MeasurementSummaryPanel shapes={workingAreaShapes} />}
+                    </div>
 
+                    {/* BASE IMAGE */}
                     {baseImage && renderImageCard(baseImage)}
 
                     {/* LEGEND AS A GRID ITEM */}

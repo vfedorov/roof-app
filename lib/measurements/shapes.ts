@@ -222,7 +222,6 @@ export const syncLinePoints = (line: fabric.Line, canvas: fabric.Canvas) => {
     const points = (line as any).vertexCircles as fabric.Circle[];
     if (!points || !Array.isArray(points) || points.length < 2) return;
 
-    // Получаем текущие координаты линии
     const coords = line.getCoords();
     const x1 = coords[0].x;
     const y1 = coords[0].y;
@@ -232,8 +231,8 @@ export const syncLinePoints = (line: fabric.Line, canvas: fabric.Canvas) => {
     // Обновляем позицию первой точки
     if (points[0]) {
         points[0].set({
-            left: x1 + (points[0].radius! / 2 || 0),
-            top: y1 + (points[0].radius! / 2 || 0),
+            left: x1,
+            top: y1,
             dirty: true,
         });
         points[0].setCoords();
@@ -242,8 +241,8 @@ export const syncLinePoints = (line: fabric.Line, canvas: fabric.Canvas) => {
     // Обновляем позицию второй точки
     if (points[1]) {
         points[1].set({
-            left: x2 + (points[1].radius! / 2 || 0),
-            top: y2 + (points[1].radius! / 2 || 0),
+            left: x2,
+            top: y2,
             dirty: true,
         });
         points[1].setCoords();

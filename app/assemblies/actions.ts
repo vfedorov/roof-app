@@ -2,26 +2,35 @@
 
 import { revalidatePath } from "next/cache";
 import { supabase } from "@/lib/supabase/supabase";
+import { getUser } from "@/lib/auth/auth";
+import { redirect } from "next/navigation";
 
-// Создание новой сборки
 export async function createAssembly(formData: FormData) {
     try {
         const assembly_name = formData.get("assembly_name") as string;
         const assembly_type = formData.get("assembly_type") as string;
         const assembly_category = formData.get("assembly_category") as string;
         const pricing_type = formData.get("pricing_type") as string;
-        const material_price = parseFloat(formData.get("material_price") as string);
-        const labor_price = parseFloat(formData.get("labor_price") as string);
         const is_active = formData.get("is_active") === "on";
-        const company_id = formData.get("company_id") as string;
+        const assembly_company = formData.get("assembly_company") as string;
+        const user = await getUser();
 
-        // Валидация
         if (!assembly_name || !assembly_type || !assembly_category || !pricing_type) {
             return { ok: false, message: "All required fields must be filled" };
         }
 
-        if (isNaN(material_price) || isNaN(labor_price)) {
-            return { ok: false, message: "Invalid price values" };
+        const material_price_raw = formData.get("material_price") as string;
+        const labor_price_raw = formData.get("labor_price") as string;
+
+        const material_price = material_price_raw ? parseFloat(material_price_raw) : null;
+
+        const labor_price = labor_price_raw ? parseFloat(labor_price_raw) : null;
+
+        if (material_price === null && labor_price === null) {
+            return {
+                ok: false,
+                message: "At least one price (material or labor) must be provided",
+            };
         }
 
         const { data, error } = await supabase
@@ -31,10 +40,11 @@ export async function createAssembly(formData: FormData) {
                 assembly_type,
                 assembly_category,
                 pricing_type,
-                material_price,
+                material_price: material_price,
                 labor_price,
                 is_active,
-                company_id,
+                company_id: assembly_company,
+                created_by: user?.id,
             })
             .select()
             .single();
@@ -49,7 +59,6 @@ export async function createAssembly(formData: FormData) {
     }
 }
 
-// Обновление существующей сборки
 export async function updateAssembly(formData: FormData) {
     try {
         const id = formData.get("id") as string;
@@ -100,20 +109,8 @@ export async function updateAssembly(formData: FormData) {
     }
 }
 
-// Удаление/деактивация сборки (мягкое удаление)
 export async function deactivateAssembly(id: string) {
-    try {
-        const { error } = await supabase
-            .from("assemblies")
-            .update({ is_active: false })
-            .eq("id", id);
-
-        if (error) throw error;
-
-        revalidatePath("/assemblies");
-        return { ok: true };
-    } catch (error: any) {
-        console.error("Deactivate assembly error:", error);
-        return { ok: false, message: error.message || "Failed to deactivate assembly" };
-    }
+    await supabase.from("assemblies").update({ is_active: false }).eq("id", id);
+    revalidatePath("/assemblies");
+    redirect("/assemblies");
 }

@@ -8,6 +8,12 @@ import { useRouter } from "next/navigation";
 interface AssemblyCategory {
     id: string;
     category_name: string;
+    type_name: "roofing" | "siding";
+}
+
+interface AssemblyCompany {
+    id: string;
+    company_name: string;
 }
 
 interface User {
@@ -20,6 +26,7 @@ interface Assembly {
     assembly_name: string;
     assembly_type: string;
     assembly_category: string;
+    assembly_company: string;
     pricing_type: string;
     material_price: number;
     labor_price: number;
@@ -32,13 +39,20 @@ interface AssemblyFormProps {
     assembly?: Assembly;
 }
 
+type AssemblyType = "roofing" | "siding";
+
 export default function AssemblyForm({ user, action, assembly }: AssemblyFormProps) {
     const { toast } = useToast();
     const router = useRouter();
     const [assemblyName, setAssemblyName] = useState<string>(assembly?.assembly_name || "");
-    const [assemblyType, setAssemblyType] = useState<string>(assembly?.assembly_type || "");
+    const [assemblyType, setAssemblyType] = useState<AssemblyType>(
+        (assembly?.assembly_type as AssemblyType) || "roofing",
+    );
     const [assemblyCategory, setAssemblyCategory] = useState<string>(
         assembly?.assembly_category || "",
+    );
+    const [assemblyCompany, setAssemblyCompany] = useState<string>(
+        assembly?.assembly_company || "",
     );
     const [pricingType, setPricingType] = useState<string>(assembly?.pricing_type || "");
     const [materialPrice, setMaterialPrice] = useState<string>(
@@ -47,23 +61,37 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
     const [laborPrice, setLaborPrice] = useState<string>(assembly?.labor_price?.toString() || "");
     const [isActive, setIsActive] = useState<boolean>(assembly?.is_active || false);
     const [categories, setCategories] = useState<AssemblyCategory[]>([]);
+    const [companies, setCompanies] = useState<AssemblyCompany[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [filteredCategories, setFilteredCategories] = useState<AssemblyCategory[]>([]);
 
+    // Загружаем все категории и компании при монтировании
     useEffect(() => {
-        const fetchCategories = async () => {
+        const fetchData = async () => {
             try {
-                const { data, error } = await supabase
+                // Загружаем категории
+                const { data: categoriesData, error: categoriesError } = await supabase
                     .from("assembly_categories")
-                    .select("id, category_name")
+                    .select("id, category_name, type_name")
                     .order("category_name");
 
-                if (error) throw error;
-                setCategories(data || []);
+                if (categoriesError) throw categoriesError;
+
+                // Загружаем компании
+                const { data: companiesData, error: companiesError } = await supabase
+                    .from("assembly_companies")
+                    .select("id, company_name")
+                    .order("company_name");
+
+                if (companiesError) throw companiesError;
+
+                setCategories(categoriesData || []);
+                setCompanies(companiesData || []);
             } catch (error) {
-                console.error("Error fetching categories:", error);
+                console.error("Error fetching data:", error);
                 toast({
                     title: "Error",
-                    description: "Failed to load assembly categories",
+                    description: "Failed to load assembly data",
                     variant: "destructive",
                 });
             } finally {
@@ -71,16 +99,24 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
             }
         };
 
-        fetchCategories();
+        fetchData();
     }, []);
+
+    // Фильтруем категории при изменении assemblyType
+    useEffect(() => {
+        const filtered = categories.filter((cat) => cat.type_name === assemblyType);
+        setFilteredCategories(filtered);
+
+        // Сбрасываем выбранную категорию, если она не подходит под новый тип
+        if (assemblyCategory && !filtered.some((cat) => cat.id === assemblyCategory)) {
+            setAssemblyCategory("");
+        }
+    }, [assemblyType, categories, assemblyCategory]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         const formData = new FormData(e.target as HTMLFormElement);
-
-        // Add company_id from user context
-        formData.append("company_id", user.id);
 
         const result = await action(formData);
         if (!result?.ok) {
@@ -124,15 +160,43 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
             {/* ASSEMBLY TYPE */}
             <div>
                 <label className="block mb-2 text-lg font-medium">Assembly Type</label>
-                <input
-                    type="text"
+                <select
                     name="assembly_type"
                     value={assemblyType}
-                    onChange={(e) => setAssemblyType(e.target.value)}
-                    className="input w-full text-lg py-3 px-4 rounded-lg"
-                    placeholder="e.g. Kitchen Cabinet"
+                    onChange={(e) => setAssemblyType(e.target.value as AssemblyType)}
+                    className="select w-full text-lg py-3 px-4 rounded-lg appearance-none bg-gray-600 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
-                />
+                >
+                    <option value="roofing">Roofing</option>
+                    <option value="siding">Siding</option>
+                </select>
+            </div>
+
+            {/* COMPANY */}
+            <div>
+                <label className="block mb-2 text-lg font-medium">Company</label>
+                {isLoading ? (
+                    <div className="bg-gray-100 rounded-lg h-12 animate-pulse" />
+                ) : companies.length === 0 ? (
+                    <div className="bg-gray-100 text-gray-500 rounded-lg p-4">
+                        No companies available. Please create companies first.
+                    </div>
+                ) : (
+                    <select
+                        name="assembly_company"
+                        value={assemblyCompany}
+                        onChange={(e) => setAssemblyCompany(e.target.value)}
+                        className="select w-full text-lg py-3 px-4 rounded-lg appearance-none bg-gray-600 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
+                    >
+                        <option value="">Select Company</option>
+                        {companies.map((company) => (
+                            <option key={company.id} value={company.id} className="py-2">
+                                {company.company_name}
+                            </option>
+                        ))}
+                    </select>
+                )}
             </div>
 
             {/* CATEGORY */}
@@ -140,16 +204,20 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
                 <label className="block mb-2 text-lg font-medium">Category</label>
                 {isLoading ? (
                     <div className="bg-gray-100 rounded-lg h-12 animate-pulse" />
+                ) : filteredCategories.length === 0 ? (
+                    <div className="bg-gray-100 text-gray-500 rounded-lg p-4">
+                        No categories available for {assemblyType}. Please create categories first.
+                    </div>
                 ) : (
                     <select
                         name="assembly_category"
                         value={assemblyCategory}
                         onChange={(e) => setAssemblyCategory(e.target.value)}
-                        className="select w-full text-lg py-3 px-4 rounded-lg appearance-none bg-white border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="select w-full text-lg py-3 px-4 rounded-lg appearance-none bg-gray-600 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         required
                     >
                         <option value="">Select Category</option>
-                        {categories.map((cat) => (
+                        {filteredCategories.map((cat) => (
                             <option key={cat.id} value={cat.id} className="py-2">
                                 {cat.category_name}
                             </option>
@@ -161,15 +229,18 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
             {/* PRICING TYPE */}
             <div>
                 <label className="block mb-2 text-lg font-medium">Pricing Type</label>
-                <input
-                    type="text"
+                <select
                     name="pricing_type"
                     value={pricingType}
                     onChange={(e) => setPricingType(e.target.value)}
-                    className="input w-full text-lg py-3 px-4 rounded-lg"
-                    placeholder="e.g. Per Unit, Hourly"
+                    className="select w-full text-lg py-3 px-4 rounded-lg appearance-none bg-gray-600 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
-                />
+                >
+                    <option value="">Select Pricing Type</option>
+                    <option value="per_square">Per Square</option>
+                    <option value="per_sq_ft">Per Sq Ft</option>
+                    <option value="per_linear_ft">Per Linear Ft</option>
+                </select>
             </div>
 
             {/* PRICES */}
@@ -185,7 +256,6 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
                         placeholder="0.00"
                         min="0"
                         step="0.01"
-                        required
                     />
                 </div>
 
@@ -200,7 +270,6 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
                         placeholder="0.00"
                         min="0"
                         step="0.01"
-                        required
                     />
                 </div>
             </div>

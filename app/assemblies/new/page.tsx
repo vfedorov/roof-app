@@ -1,6 +1,6 @@
 import { getUser } from "@/lib/auth/auth";
-import { createAssembly } from "../actions";
 import AssemblyForm from "@/app/components/assembly_form";
+import { createAssembly } from "@/app/assemblies/actions";
 
 export default async function NewAssemblyPage() {
     const user = await getUser();

@@ -12,8 +12,6 @@ export async function createMeasurement(formData: FormData) {
     const notes = formData.get("summary_notes") as string;
     const user = await getUser();
 
-    const now = new Date().toISOString();
-
     const { data: measurement, error: measurementError } = await supabase
         .from("measurement_sessions")
         .insert({

@@ -49,13 +49,13 @@ export default async function AssemblyDetailPage({ params }: PageProps<"/assembl
                             </div>
                             <div className="space-y-1">
                                 <p className="text-sm text-gray-500">Price:</p>
-                                {assembly.material_price && (
+                                {assembly.material_price && assembly.material_price > 0 && (
                                     <p className="font-medium">
                                         Material: {assembly.material_price} ($/
                                         {assembly.pricing_type})
                                     </p>
                                 )}
-                                {assembly.labor_price && (
+                                {assembly.labor_price && assembly.labor_price > 0 && (
                                     <p className="font-medium">
                                         Labor: {assembly.labor_price} ($/{assembly.pricing_type})
                                     </p>

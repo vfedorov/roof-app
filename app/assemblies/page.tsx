@@ -6,7 +6,7 @@ import { USER_ROLES } from "@/lib/auth/roles";
 export default async function MeasurementsPage() {
     const user = await getUser();
 
-    const query = supabase.from("assemblies").select("*, users(name)");
+    const query = supabase.from("assemblies").select("*, users(name)").eq("is_active", true);
 
     if (user.role != USER_ROLES.ADMIN) {
         return;

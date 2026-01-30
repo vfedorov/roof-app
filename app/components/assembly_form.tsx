@@ -158,7 +158,7 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
                     name="assembly_type"
                     value={assemblyType}
                     onChange={(e) => setAssemblyType(e.target.value as AssemblyType)}
-                    className="select w-full text-lg py-3 px-4 rounded-lg appearance-none bg-gray-600 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="select w-full text-lg py-3 px-4 rounded-lg appearance-none border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                 >
                     <option value="roofing">Roofing</option>
@@ -180,7 +180,7 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
                         name="assembly_company"
                         value={assemblyCompany}
                         onChange={(e) => setAssemblyCompany(e.target.value)}
-                        className="select w-full text-lg py-3 px-4 rounded-lg appearance-none bg-gray-600 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="select w-full text-lg py-3 px-4 rounded-lg appearance-none border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         required
                     >
                         <option value="">Select Company</option>
@@ -207,7 +207,7 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
                         name="assembly_category"
                         value={assemblyCategory}
                         onChange={(e) => setAssemblyCategory(e.target.value)}
-                        className="select w-full text-lg py-3 px-4 rounded-lg appearance-none bg-gray-600 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="select w-full text-lg py-3 px-4 rounded-lg appearance-none border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         required
                     >
                         <option value="">Select Category</option>
@@ -227,7 +227,7 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
                     name="pricing_type"
                     value={pricingType}
                     onChange={(e) => setPricingType(e.target.value)}
-                    className="select w-full text-lg py-3 px-4 rounded-lg appearance-none bg-gray-600 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="select w-full text-lg py-3 px-4 rounded-lg appearance-none border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                 >
                     <option value="">Select Pricing Type</option>

@@ -46,6 +46,9 @@ export default function DesktopHeader() {
                 case "users":
                     label = "Users";
                     break;
+                case "estimates":
+                    label = "Estimates";
+                    break;
                 case "new":
                     label = "New";
                     break;

@@ -12,19 +12,21 @@ export const MeasurementSummaryPanel = ({ shapes }: SummaryPanelProps) => {
     return (
         <div className="measurement-summary">
             {summary.linear.other === 0 &&
-                summary.otherAreaSqFt === 0 &&
-                summary.linear.ridge === 0 &&
-                summary.linear.eave === 0 &&
-                summary.linear.trim === 0 &&
-                summary.siding.totalAreaSqFt === 0 &&
-                summary.roof.totalAreaSqFt === 0 && (
-                    <>
-                        <p>
-                            At the moment, not a single shape has been set in the base image, the
-                            data of which could be included in the summary measurement report.
-                        </p>
-                    </>
-                )}
+            summary.otherAreaSqFt === 0 &&
+            summary.linear.ridge === 0 &&
+            summary.linear.eave === 0 &&
+            summary.linear.trim === 0 &&
+            summary.siding.totalAreaSqFt === 0 &&
+            summary.roof.totalAreaSqFt === 0 ? (
+                <>
+                    <p>
+                        At the moment, not a single shape has been set in the base image, the data
+                        of which could be included in the summary measurement report.
+                    </p>
+                </>
+            ) : (
+                <>{/*Here may be a button for Estimate*/}</>
+            )}
 
             {summary.roof.totalAreaSqFt > 0 && (
                 <>

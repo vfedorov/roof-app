@@ -12,7 +12,7 @@ export default async function AdminDashboard() {
         supabase.from("properties").select("id"),
         supabase.from("inspections").select("id"),
         supabase.from("measurement_sessions").select("id"),
-        supabase.from("assemblies").select("id"),
+        supabase.from("assemblies").select("id, is_active"),
         supabase.from("users").select("id"),
     ]);
 
@@ -41,6 +41,15 @@ export default async function AdminDashboard() {
 
                 <Link href="/assemblies" className="card block hover:no-underline">
                     <div className="text-4xl font-bold">{assemblies?.length}</div>
+                    <div className="mt-2 text-sm">
+                        <span className="text-green-600 font-medium">
+                            {assemblies?.filter((a) => a.is_active).length} active
+                        </span>
+                        {" • "}
+                        <span className="text-gray-500 font-medium">
+                            {assemblies?.filter((a) => !a.is_active).length} inactive
+                        </span>
+                    </div>
                     <div className="text-gray-500">Assemblies</div>
                     <span className="card-link">Manage</span>
                 </Link>

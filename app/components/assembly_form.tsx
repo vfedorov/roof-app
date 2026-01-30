@@ -65,11 +65,9 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [filteredCategories, setFilteredCategories] = useState<AssemblyCategory[]>([]);
 
-    // Загружаем все категории и компании при монтировании
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Загружаем категории
                 const { data: categoriesData, error: categoriesError } = await supabase
                     .from("assembly_categories")
                     .select("id, category_name, type_name")
@@ -77,7 +75,6 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
 
                 if (categoriesError) throw categoriesError;
 
-                // Загружаем компании
                 const { data: companiesData, error: companiesError } = await supabase
                     .from("assembly_companies")
                     .select("id, company_name")
@@ -102,15 +99,12 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
         fetchData();
     }, []);
 
-    // Фильтруем категории при изменении assemblyType
     useEffect(() => {
         const filtered = categories.filter((cat) => cat.type_name === assemblyType);
         setFilteredCategories(filtered);
-
-        // Сбрасываем выбранную категорию, если она не подходит под новый тип
-        if (assemblyCategory && !filtered.some((cat) => cat.id === assemblyCategory)) {
-            setAssemblyCategory("");
-        }
+        // if (assemblyCategory && !filtered.some((cat) => cat.id === assemblyCategory)) {
+        //     setAssemblyCategory("");
+        // }
     }, [assemblyType, categories, assemblyCategory]);
 
     const handleSubmit = async (e: React.FormEvent) => {

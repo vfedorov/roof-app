@@ -40,6 +40,9 @@ export default function DesktopHeader() {
                 case "measurements":
                     label = "Measurements";
                     break;
+                case "assemblies":
+                    label = "Assemblies";
+                    break;
                 case "users":
                     label = "Users";
                     break;

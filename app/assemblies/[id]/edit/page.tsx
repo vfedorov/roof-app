@@ -2,14 +2,25 @@ import { getUser } from "@/lib/auth/auth";
 import { supabase } from "@/lib/supabase/supabase";
 import AssemblyForm from "@/app/components/assembly_form";
 import { updateAssembly } from "@/app/assemblies/actions";
+import { USER_ROLES } from "@/lib/auth/roles";
 
-export default async function EditAssemblyPage({ params }: { params: { id: string } }) {
+export default async function EditAssemblyPage({ params }: PageProps<"/assemblies/[id]/edit">) {
     const user = await getUser();
+    const { id } = await params;
 
+    if (user.role != USER_ROLES.ADMIN) {
+        return (
+            <div className="flex justify-center">
+                <span>
+                    <strong>Again, you must hear: to the administrator, belong these pages.</strong>
+                </span>
+            </div>
+        );
+    }
     const { data: assemblyData, error } = await supabase
         .from("assemblies")
         .select("*")
-        .eq("id", params.id)
+        .eq("id", id)
         .single();
 
     if (error || !assemblyData) {
@@ -26,10 +37,10 @@ export default async function EditAssemblyPage({ params }: { params: { id: strin
         assembly_name: assemblyData.assembly_name,
         assembly_type: assemblyData.assembly_type,
         assembly_category: assemblyData.assembly_category,
-        assembly_company: assemblyData.assembly_company,
+        assembly_company: assemblyData.company_id,
         pricing_type: assemblyData.pricing_type,
-        material_price: assemblyData.material_price ?? 0,
-        labor_price: assemblyData.labor_price ?? 0,
+        material_price: assemblyData.material_price ?? "",
+        labor_price: assemblyData.labor_price ?? "",
         is_active: assemblyData.is_active,
     };
 

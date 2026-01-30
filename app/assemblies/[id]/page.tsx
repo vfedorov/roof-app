@@ -1,9 +1,21 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/supabase";
 import { deactivateAssembly } from "@/app/assemblies/actions";
+import { USER_ROLES } from "@/lib/auth/roles";
+import { getUser } from "@/lib/auth/auth";
 
 export default async function AssemblyDetailPage({ params }: PageProps<"/assemblies/[id]">) {
     const { id } = await params;
+    const user = await getUser();
+    if (user.role != USER_ROLES.ADMIN) {
+        return (
+            <div className="flex justify-center">
+                <span>
+                    <strong>Hear me now. The administrator&#39;s domain, these pages are.</strong>
+                </span>
+            </div>
+        );
+    }
     const { data: assembly } = await supabase
         .from("assemblies")
         .select(
@@ -11,7 +23,6 @@ export default async function AssemblyDetailPage({ params }: PageProps<"/assembl
         )
         .eq("id", id)
         .single();
-
     if (!assembly) return <div>Assembly not found</div>;
 
     return (
@@ -24,19 +35,29 @@ export default async function AssemblyDetailPage({ params }: PageProps<"/assembl
                                 <p className="text-sm uppercase tracking-wide text-gray-500">
                                     Assembly
                                 </p>
-                                <h1 className="text-2xl font-bold">{assembly.assembly_name}</h1>
+                                <h1 className="text-2xl font-bold">
+                                    {assembly.assembly_name}{" "}
+                                    {!assembly.is_active && (
+                                        <span className="text-gray-400 font-normal">
+                                            {" "}
+                                            (Deactivated)
+                                        </span>
+                                    )}
+                                </h1>
                                 <p className="text-sm text-gray-600 dark:text-gray-300">
                                     {assembly.assembly_type} (
                                     {assembly.assembly_companies?.company_name})
                                 </p>
                             </div>
                             <div className="flex gap-2">
-                                <Link href={`/assemblies/${id}/edit`} className="btn">
+                                <Link key={id} href={`/assemblies/${id}/edit`} className="btn">
                                     Edit
                                 </Link>
-                                <form action={deactivateAssembly.bind(null, id)}>
-                                    <button className="btn-danger">Delete</button>
-                                </form>
+                                {assembly.is_active && (
+                                    <form action={deactivateAssembly.bind(null, id)}>
+                                        <button className="btn-danger">Deactivate</button>
+                                    </form>
+                                )}
                             </div>
                         </div>
 

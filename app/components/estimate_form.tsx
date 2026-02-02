@@ -1,736 +1,592 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/supabase";
 import { useToast } from "@/app/components/providers/toast-provider";
 import { useRouter } from "next/navigation";
 
-interface AssemblyCategory {
+interface Inspection {
     id: string;
-    category_name: string;
-    type_name: "roofing" | "siding";
+    date: string;
+    properties: {
+        id: string;
+        name: string | null;
+        address: string | null;
+    } | null;
+    users: {
+        name: string | null;
+    } | null;
+}
+
+interface MeasurementSession {
+    id: string;
+    date: string;
+    properties: {
+        id: string;
+        name: string | null;
+        address: string | null;
+    } | null;
+    users: {
+        name: string | null;
+    } | null;
 }
 
 interface Assembly {
     id: string;
     assembly_name: string;
-    assembly_type: string;
-    assembly_category: string;
-    pricing_type: string;
+    assembly_type: "roofing" | "siding";
+    pricing_type: "per_square" | "per_sq_ft" | "per_linear_ft";
     material_price: number;
     labor_price: number;
     is_active: boolean;
+    assembly_categories: { category_name: string | null } | null;
+    assembly_companies: { company_name: string | null } | null;
 }
 
-interface MeasurementSession {
-    id: string;
-    session_name: string;
-    inspection_id: string;
-    created_at: string;
-}
-
-interface Inspection {
-    id: string;
-    inspection_name: string;
-    address: string;
-}
-
-interface User {
-    id: string;
-    role: string;
+interface Estimate {
+    id?: string;
+    inspection_id?: string;
+    measurement_session_id?: string;
+    is_finalize?: boolean;
 }
 
 interface EstimateItem {
-    id: string;
+    id?: string;
     assembly_id?: string;
-    is_manual: boolean;
-    manual_assembly_type?: string;
-    manual_pricing_type?: string;
+    manual_assembly_type?: "roofing" | "siding";
+    manual_pricing_type?: "per_square" | "per_sq_ft" | "per_linear_ft";
+    manual_material_price?: number;
+    manual_labor_price?: number;
     manual_descriptions?: string;
-    quantity: number;
-    material_price: number;
-    labor_price: number;
-    total_price: number;
+    is_manual?: boolean;
 }
 
 interface EstimateFormProps {
-    user: User;
-    action: (
-        formData: FormData,
-    ) => Promise<{ ok: boolean; message?: string; estimateId?: string } | void>;
-    estimateId?: string;
+    user: { id: string; role: string };
+    action: (formData: FormData) => Promise<{ ok: boolean; message?: string } | void>;
+    estimate?: Estimate;
 }
 
-export default function EstimateForm({ user, action, estimateId }: EstimateFormProps) {
+export default function EstimateForm({ user, action, estimate }: EstimateFormProps) {
     const { toast } = useToast();
     const router = useRouter();
 
+    // Form state
     const [inspectionId, setInspectionId] = useState<string>("");
     const [measurementSessionId, setMeasurementSessionId] = useState<string>("");
-    const [isDraft, setIsDraft] = useState<boolean>(true);
-
-    const [items, setItems] = useState<EstimateItem[]>([
-        {
-            id: Date.now().toString(),
-            is_manual: false,
-            quantity: 0,
-            material_price: 0,
-            labor_price: 0,
-            total_price: 0,
-        },
-    ]);
-
+    const [assemblies, setAssemblies] = useState<Assembly[]>([]);
     const [inspections, setInspections] = useState<Inspection[]>([]);
     const [measurementSessions, setMeasurementSessions] = useState<MeasurementSession[]>([]);
-    const [assemblies, setAssemblies] = useState<Assembly[]>([]);
-    const [filteredAssemblies, setFilteredAssemblies] = useState<Assembly[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+    const [isFinalized, setIsFinalized] = useState<boolean>(estimate?.is_finalize || false);
+    const [estimateItems, setEstimateItems] = useState<EstimateItem[]>([]);
+    const [newManualItem, setNewManualItem] = useState<Omit<EstimateItem, "is_manual">>({
+        manual_assembly_type: "roofing",
+        manual_pricing_type: "per_sq_ft",
+        manual_material_price: 0,
+        manual_labor_price: 0,
+        manual_descriptions: "",
+    });
 
-    // Загрузка данных
-    // useEffect(() => {
-    //     const fetchData = async () => {
-    //         try {
-    //             // Загрузка инспекций пользователя
-    //             const { data: inspectionsData, error: inspectionsError } = await supabase
-    //                 .from("inspections")
-    //                 .select("id, inspection_name, address")
-    //                 .eq("created_by", user.id)
-    //                 .order("created_at", { ascending: false });
-    //
-    //             if (inspectionsError) throw inspectionsError;
-    //
-    //             setInspections(inspectionsData || []);
-    //
-    //             if (inspectionsData && inspectionsData.length > 0) {
-    //                 setInspectionId(inspectionsData[0].id);
-    //             }
-    //
-    //             // Загрузка сборок компании
-    //             const { data: assembliesData, error: assembliesError } = await supabase
-    //                 .from("assemblies")
-    //                 .select("*")
-    //                 .eq("is_active", true)
-    //                 .order("assembly_name");
-    //
-    //             if (assembliesError) throw assembliesError;
-    //
-    //             setAssemblies(assembliesData || []);
-    //             setFilteredAssemblies(assembliesData || []);
-    //         } catch (error) {
-    //             console.error("Error fetching data:", error);
-    //             toast({
-    //                 title: "Error",
-    //                 description: "Failed to load data",
-    //                 variant: "destructive",
-    //             });
-    //         } finally {
-    //             setIsLoading(false);
-    //         }
-    //     };
-    //
-    //     fetchData();
-    // }, [user.id]);
+    // Fetch data
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const { data: inspectionsData, error: inspError } = await supabase
+                    .from("inspections")
+                    .select(
+                        "id, date, properties!property_id(id, name, address), users!inspector_id(name)",
+                    )
+                    .order("created_at", { ascending: false });
 
-    // Загрузка сессий измерений при изменении инспекции
-    // useEffect(() => {
-    //     if (!inspectionId) return;
-    //
-    //     const fetchSessions = async () => {
-    //         try {
-    //             const { data: sessionsData, error: sessionsError } = await supabase
-    //                 .from("measurement_sessions")
-    //                 .select("id, session_name, created_at")
-    //                 .eq("inspection_id", inspectionId)
-    //                 .order("created_at", { ascending: false });
-    //
-    //             if (sessionsError) throw sessionsError;
-    //
-    //             setMeasurementSessions(sessionsData || []);
-    //
-    //             if (sessionsData && sessionsData.length > 0) {
-    //                 setMeasurementSessionId(sessionsData[0].id);
-    //             }
-    //         } catch (error) {
-    //             console.error("Error fetching measurement sessions:", error);
-    //             toast({
-    //                 title: "Error",
-    //                 description: "Failed to load measurement sessions",
-    //                 variant: "destructive",
-    //             });
-    //         }
-    //     };
-    //
-    //     fetchSessions();
-    // }, [inspectionId]);
+                if (inspError) throw inspError;
 
-    // Обновление цены при изменении количества или цен
-    const updateItemPrice = (itemId: string, updates: Partial<EstimateItem>) => {
-        setItems((prevItems) =>
-            prevItems.map((item) => {
-                if (item.id !== itemId) return item;
+                const { data: assembliesData, error: asmError } = await supabase
+                    .from("assemblies")
+                    .select(
+                        "id, assembly_name, assembly_type, pricing_type, material_price, labor_price, is_active, assembly_categories!assembly_category(category_name), assembly_companies!company_id(company_name)",
+                    )
+                    .eq("is_active", true);
 
-                const updatedItem = { ...item, ...updates };
+                if (asmError) throw asmError;
 
-                // Пересчет общей цены
-                const quantity = parseFloat(updatedItem.quantity?.toString() || "0") || 0;
-                const materialPrice =
-                    parseFloat(updatedItem.material_price?.toString() || "0") || 0;
-                const laborPrice = parseFloat(updatedItem.labor_price?.toString() || "0") || 0;
+                // setInspections(inspectionsData || []);
+                const normalizedInspectionsData = (inspectionsData || []).map((insp) => ({
+                    id: insp.id,
+                    date: insp.date,
+                    properties: Array.isArray(insp.properties)
+                        ? insp.properties.length > 0
+                            ? insp.properties[0]
+                            : null
+                        : insp.properties,
+                    users: Array.isArray(insp.users)
+                        ? insp.users.length > 0
+                            ? insp.users[0]
+                            : null
+                        : insp.users,
+                }));
 
-                updatedItem.total_price = quantity * (materialPrice + laborPrice);
+                setInspections(normalizedInspectionsData);
 
-                return updatedItem;
-            }),
-        );
-    };
+                const normalizedAssembliesData = (assembliesData || []).map((asm) => ({
+                    id: asm.id,
+                    assembly_name: asm.assembly_name,
+                    assembly_type: asm.assembly_type,
+                    pricing_type: asm.pricing_type,
+                    material_price: asm.material_price,
+                    labor_price: asm.labor_price,
+                    is_active: asm.is_active,
+                    assembly_categories: Array.isArray(asm.assembly_categories)
+                        ? asm.assembly_categories.length > 0
+                            ? asm.assembly_categories[0]
+                            : null
+                        : asm.assembly_categories,
+                    assembly_companies: Array.isArray(asm.assembly_companies)
+                        ? asm.assembly_companies.length > 0
+                            ? asm.assembly_companies[0]
+                            : null
+                        : asm.assembly_companies,
+                }));
 
-    // Добавление нового элемента
-    const addItem = () => {
-        setItems([
-            ...items,
-            {
-                id: Date.now().toString(),
-                is_manual: false,
-                quantity: 0,
-                material_price: 0,
-                labor_price: 0,
-                total_price: 0,
-            },
-        ]);
-    };
-
-    // Удаление элемента
-    const removeItem = (itemId: string) => {
-        if (items.length <= 1) {
-            toast({
-                title: "Warning",
-                description: "At least one item is required",
-                variant: "warning",
-            });
-            return;
-        }
-        setItems(items.filter((item) => item.id !== itemId));
-    };
-
-    // Переключение между ручным и автоматическим режимом
-    const toggleManualMode = (itemId: string, isManual: boolean) => {
-        setItems((prevItems) =>
-            prevItems.map((item) => {
-                if (item.id !== itemId) return item;
-
-                if (isManual) {
-                    // Очистка данных сборки при переходе в ручной режим
-                    return {
-                        ...item,
-                        is_manual: true,
-                        assembly_id: undefined,
-                        manual_assembly_type: "",
-                        manual_pricing_type: "",
-                        manual_descriptions: "",
-                        material_price: 0,
-                        labor_price: 0,
-                        total_price: 0,
-                    };
-                } else {
-                    // Очистка ручных данных при переходе в автоматический режим
-                    return {
-                        ...item,
-                        is_manual: false,
-                        manual_assembly_type: undefined,
-                        manual_pricing_type: undefined,
-                        manual_descriptions: undefined,
-                        material_price: 0,
-                        labor_price: 0,
-                        total_price: 0,
-                    };
-                }
-            }),
-        );
-    };
-
-    // Расчет итоговых сумм
-    const calculateTotals = () => {
-        const totals = items.reduce(
-            (acc, item) => {
-                acc.material += item.material_price * item.quantity;
-                acc.labor += item.labor_price * item.quantity;
-                acc.total += item.total_price;
-                return acc;
-            },
-            { material: 0, labor: 0, total: 0 },
-        );
-
-        return totals;
-    };
-
-    const totals = calculateTotals();
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-
-        try {
-            const formData = new FormData(e.target as HTMLFormElement);
-
-            // Добавление элементов сметы в форму
-            items.forEach((item, index) => {
-                formData.append(`items[${index}][is_manual]`, item.is_manual.toString());
-                formData.append(`items[${index}][quantity]`, item.quantity.toString());
-                formData.append(`items[${index}][material_price]`, item.material_price.toString());
-                formData.append(`items[${index}][labor_price]`, item.labor_price.toString());
-                formData.append(`items[${index}][total_price]`, item.total_price.toString());
-
-                if (item.is_manual) {
-                    formData.append(
-                        `items[${index}][manual_assembly_type]`,
-                        item.manual_assembly_type || "",
-                    );
-                    formData.append(
-                        `items[${index}][manual_pricing_type]`,
-                        item.manual_pricing_type || "",
-                    );
-                    formData.append(
-                        `items[${index}][manual_descriptions]`,
-                        item.manual_descriptions || "",
-                    );
-                } else if (item.assembly_id) {
-                    formData.append(`items[${index}][assembly_id]`, item.assembly_id);
-                }
-            });
-
-            const result = await action(formData);
-
-            if (!result?.ok) {
+                setAssemblies(normalizedAssembliesData || []);
+            } catch (error) {
+                console.error("Error fetching inspections/assemblies:", error);
                 toast({
                     title: "Error",
-                    description: result?.message || "Failed to save estimate",
+                    description: "Failed to load inspections or assemblies",
+                    variant: "destructive",
+                });
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
+    }, []);
+
+    // Load measurement sessions when inspection selected
+    useEffect(() => {
+        const fetchSessions = async () => {
+            const { data, error } = await supabase
+                .from("measurement_sessions")
+                .select(
+                    "id, date, properties!property_id(id, name, address), users!created_by(name)",
+                )
+                .order("created_at", { ascending: false });
+
+            if (error) {
+                console.error("Error loading sessions:", error);
+                toast({
+                    title: "Error",
+                    description: "Failed to load measurement sessions",
                     variant: "destructive",
                 });
                 return;
             }
 
-            toast({
-                title: "Success",
-                description: isDraft
-                    ? "Draft saved successfully!"
-                    : "Estimate created successfully!",
-            });
+            const normalizedData = (data || []).map((sess) => ({
+                id: sess.id,
+                date: sess.date,
+                properties: Array.isArray(sess.properties)
+                    ? sess.properties.length > 0
+                        ? sess.properties[0]
+                        : null
+                    : sess.properties,
+                users: Array.isArray(sess.users)
+                    ? sess.users.length > 0
+                        ? sess.users[0]
+                        : null
+                    : sess.users,
+            }));
 
-            if (result.estimateId) {
-                router.push(`/estimates/${result.estimateId}`);
-            } else {
-                router.push("/estimates");
+            setMeasurementSessions(normalizedData || []);
+            // Optionally auto-select first session if only one
+            if (data && data.length === 1) {
+                setMeasurementSessionId(data[0].id);
             }
-        } catch (error) {
-            console.error("Submit error:", error);
+        };
+
+        fetchSessions();
+    }, []);
+
+    // Handlers
+    const handleAddFromAssembly = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!measurementSessionId || !inspectionId) return;
+
+        const assembly = assemblies.find(
+            (a) => a.id === e.currentTarget.getAttribute("data-assembly-id"),
+        );
+        if (!assembly) return;
+
+        const newItem: EstimateItem = {
+            assembly_id: assembly.id,
+            manual_assembly_type: assembly.assembly_type,
+            manual_pricing_type: assembly.pricing_type,
+            manual_material_price: assembly.material_price,
+            manual_labor_price: assembly.labor_price,
+            manual_descriptions: "",
+            is_manual: false,
+        };
+
+        setEstimateItems([...estimateItems, newItem]);
+        toast({
+            title: "Added",
+            description: `${assembly.assembly_name} added to estimate`,
+        });
+    };
+
+    const handleAddManualItem = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!measurementSessionId || !inspectionId) return;
+
+        const item: EstimateItem = {
+            ...newManualItem,
+            is_manual: true,
+        };
+
+        setEstimateItems([...estimateItems, item]);
+        toast({
+            title: "Added",
+            description: "Manual line item added",
+        });
+        // Reset form
+        setNewManualItem({
+            manual_assembly_type: "roofing",
+            manual_pricing_type: "per_sq_ft",
+            manual_material_price: 0,
+            manual_labor_price: 0,
+            manual_descriptions: "",
+        });
+    };
+
+    const handleRemoveItem = (index: number) => {
+        setEstimateItems(estimateItems.filter((_, i) => i !== index));
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const formData = new FormData(e.target as HTMLFormElement);
+        console.log("formData", formData);
+        // Append estimate items manually
+        estimateItems.forEach((item, idx) => {
+            formData.append(`items[${idx}][assembly_id]`, item.assembly_id || "");
+            formData.append(`items[${idx}][manual_assembly_type]`, item.manual_assembly_type || "");
+            formData.append(`items[${idx}][manual_pricing_type]`, item.manual_pricing_type || "");
+            formData.append(
+                `items[${idx}][material_price]`,
+                String(item.manual_material_price || null),
+            );
+            formData.append(
+                `items[${idx}][manual_labor_price]`,
+                String(item.manual_labor_price || null),
+            );
+            formData.append(`items[${idx}][manual_descriptions]`, item.manual_descriptions || "");
+            formData.append(`items[${idx}][is_manual]`, String(item.is_manual || false));
+        });
+
+        const result = await action(formData);
+        console.log("handleSubmit formData", formData);
+        console.log("result", result);
+
+        if (!result?.ok) {
             toast({
                 title: "Error",
-                description: "An unexpected error occurred",
+                description: result?.message || "Failed to save estimate",
                 variant: "destructive",
             });
-        } finally {
-            setIsSubmitting(false);
+            return;
+        }
+
+        toast({
+            title: "Success",
+            description: "Estimate saved successfully!",
+        });
+
+        if (estimate) {
+            router.push(`/estimates/${estimate.id}`);
+        } else {
+            router.push("/estimates");
         }
     };
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
-            {/* HIDDEN FIELDS */}
-            <input type="hidden" name="created_by" value={user.id} />
-            <input type="hidden" name="is_draft" value={isDraft.toString()} />
-            {estimateId && <input type="hidden" name="id" value={estimateId} />}
-
-            {/* INSPECTION SELECTION */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-                <label className="block mb-3 text-lg font-medium text-gray-800">Inspection</label>
+            {/* INSPECTION */}
+            <div>
+                <label className="block mb-2 text-lg font-medium">Inspection</label>
                 {isLoading ? (
-                    <div className="bg-gray-100 rounded-lg h-14 animate-pulse" />
+                    <div className="bg-gray-800 rounded-lg h-12 animate-pulse" />
                 ) : inspections.length === 0 ? (
-                    <div className="bg-gray-50 text-gray-500 rounded-lg p-4 text-center">
+                    <div className="bg-gray-800 text-gray-500 rounded-lg p-4">
                         No inspections available. Please create an inspection first.
                     </div>
                 ) : (
                     <select
                         name="inspection_id"
                         value={inspectionId}
-                        onChange={(e) => {
-                            setInspectionId(e.target.value);
-                            setMeasurementSessionId("");
-                        }}
-                        className="w-full py-4 px-5 text-lg rounded-xl border border-gray-300 focus:ring-3 focus:ring-blue-500 focus:border-blue-500 bg-white appearance-none"
+                        onChange={(e) => setInspectionId(e.target.value)}
+                        className="select w-full text-lg py-3 px-4 rounded-lg appearance-none border border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-800 text-white"
                         required
                     >
                         <option value="">Select Inspection</option>
-                        {inspections.map((inspection) => (
-                            <option key={inspection.id} value={inspection.id} className="py-3">
-                                {inspection.inspection_name} - {inspection.address}
+                        {inspections.map((insp) => (
+                            <option key={insp.id} value={insp.id} className="py-2">
+                                {insp.properties?.name}•{insp.properties?.address}•
+                                {insp.users?.name} ({new Date(insp.date).toLocaleDateString()})
                             </option>
                         ))}
                     </select>
                 )}
             </div>
 
-            {/* MEASUREMENT SESSION SELECTION */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-                <label className="block mb-3 text-lg font-medium text-gray-800">
-                    Measurement Session
-                </label>
+            {/* MEASUREMENT SESSION */}
+            <div>
+                <label className="block mb-2 text-lg font-medium">Measurement Session</label>
                 {isLoading ? (
-                    <div className="bg-gray-100 rounded-lg h-14 animate-pulse" />
-                ) : !inspectionId ? (
-                    <div className="bg-gray-50 text-gray-500 rounded-lg p-4 text-center">
-                        Please select an inspection first
-                    </div>
+                    <div className="bg-gray-800 rounded-lg h-12 animate-pulse" />
                 ) : measurementSessions.length === 0 ? (
-                    <div className="bg-gray-50 text-gray-500 rounded-lg p-4 text-center">
-                        No measurement sessions available for this inspection
+                    <div className="bg-gray-800 text-gray-500 rounded-lg p-4">
+                        {/*{inspectionId*/}
+                        {/*    ? " for this inspection."*/}
+                        {/*    : "Select an inspection first."}*/}
+                        No measurement sessions.
                     </div>
                 ) : (
                     <select
                         name="measurement_session_id"
                         value={measurementSessionId}
                         onChange={(e) => setMeasurementSessionId(e.target.value)}
-                        className="w-full py-4 px-5 text-lg rounded-xl border border-gray-300 focus:ring-3 focus:ring-blue-500 focus:border-blue-500 bg-white appearance-none"
+                        className="select w-full text-lg py-3 px-4 rounded-lg appearance-none border border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-800 text-white"
                         required
                     >
-                        <option value="">Select Measurement Session</option>
-                        {measurementSessions.map((session) => (
-                            <option key={session.id} value={session.id} className="py-3">
-                                {session.session_name} -{" "}
-                                {new Date(session.created_at).toLocaleDateString()}
+                        <option value="">Select Session</option>
+                        {measurementSessions.map((sess) => (
+                            <option key={sess.id} value={sess.id} className="py-2">
+                                {sess.properties?.name}•{sess.properties?.address}•
+                                {sess.users?.name} ({new Date(sess.date).toLocaleDateString()})
                             </option>
                         ))}
                     </select>
                 )}
             </div>
 
-            {/* ESTIMATE ITEMS */}
-            <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-gray-800">Estimate Items</h2>
+            {/* ADD FROM ASSEMBLY */}
+            <div>
+                <h3 className="text-xl font-semibold mb-3">Add Line Item from Assembly</h3>
+                {isLoading ? (
+                    <div className="bg-gray-800 rounded-lg h-12 animate-pulse" />
+                ) : assemblies.length === 0 ? (
+                    <div className="bg-gray-800 text-gray-500 rounded-lg p-4">
+                        No active assemblies available. Please create assemblies first.
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {assemblies.map((asm) => (
+                            <button
+                                key={asm.id}
+                                type="button"
+                                data-assembly-id={asm.id}
+                                onClick={handleAddFromAssembly}
+                                className="w-full text-left py-3 px-4 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-600 transition-colors text-lg"
+                            >
+                                {asm.assembly_name} — {asm.assembly_type} •{" "}
+                                {asm.assembly_categories?.category_name} • $
+                                {(asm.material_price + asm.labor_price).toFixed(2)}/
+                                {asm.pricing_type.replace(/_/g, " ")} (
+                                {asm.assembly_companies?.company_name})
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* ADD MANUAL ITEM */}
+            <div>
+                <h3 className="text-xl font-semibold mb-3">Add Manual Line Item</h3>
+                <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label className="block mb-2 text-sm font-medium">Assembly Type</label>
+                            <select
+                                value={newManualItem.manual_assembly_type}
+                                onChange={(e) =>
+                                    setNewManualItem({
+                                        ...newManualItem,
+                                        manual_assembly_type: e.target.value as
+                                            | "roofing"
+                                            | "siding",
+                                    })
+                                }
+                                className="select w-full py-2 px-3 rounded-lg bg-gray-900 border border-gray-600 text-white"
+                            >
+                                <option value="roofing">Roofing</option>
+                                <option value="siding">Siding</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block mb-2 text-sm font-medium">Pricing Type</label>
+                            <select
+                                value={newManualItem.manual_pricing_type}
+                                onChange={(e) =>
+                                    setNewManualItem({
+                                        ...newManualItem,
+                                        manual_pricing_type: e.target.value as any,
+                                    })
+                                }
+                                className="select w-full py-2 px-3 rounded-lg bg-gray-900 border border-gray-600 text-white"
+                            >
+                                <option value="per_square">Per Square</option>
+                                <option value="per_sq_ft">Per Sq Ft</option>
+                                <option value="per_linear_ft">Per Linear Ft</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block mb-2 text-sm font-medium">Material Price</label>
+                            <input
+                                type="number"
+                                value={newManualItem.manual_material_price}
+                                onChange={(e) =>
+                                    setNewManualItem({
+                                        ...newManualItem,
+                                        manual_material_price: parseFloat(e.target.value) || 0,
+                                    })
+                                }
+                                min="0"
+                                step="0.01"
+                                className="input w-full py-2 px-3 rounded-lg bg-gray-900 border border-gray-600 text-white"
+                                placeholder="0.00"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block mb-2 text-sm font-medium">Labor Price</label>
+                            <input
+                                type="number"
+                                value={newManualItem.manual_labor_price}
+                                onChange={(e) =>
+                                    setNewManualItem({
+                                        ...newManualItem,
+                                        manual_labor_price: parseFloat(e.target.value) || 0,
+                                    })
+                                }
+                                min="0"
+                                step="0.01"
+                                className="input w-full py-2 px-3 rounded-lg bg-gray-900 border border-gray-600 text-white"
+                                placeholder="0.00"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block mb-2 text-sm font-medium">
+                                Notes (optional)
+                            </label>
+                            <input
+                                type="text"
+                                value={newManualItem.manual_descriptions}
+                                onChange={(e) =>
+                                    setNewManualItem({
+                                        ...newManualItem,
+                                        manual_descriptions: e.target.value,
+                                    })
+                                }
+                                className="input w-full py-2 px-3 rounded-lg bg-gray-900 border border-gray-600 text-white"
+                                placeholder="e.g., misc repair"
+                            />
+                        </div>
+                    </div>
+
                     <button
                         type="button"
-                        onClick={addItem}
-                        className="px-6 py-3 bg-blue-50 text-blue-700 rounded-xl font-medium hover:bg-blue-100 transition-colors text-lg shadow-sm"
+                        onClick={handleAddManualItem}
+                        className="btn w-full py-3 text-lg rounded-lg bg-green-600 hover:bg-green-700 transition-colors"
                     >
-                        + Add Item
+                        ➕ Add Manual Line Item
                     </button>
                 </div>
-
-                {items.map((item, index) => (
-                    <div
-                        key={item.id}
-                        className="bg-white rounded-xl p-6 shadow-sm border border-gray-200"
-                    >
-                        <div className="flex justify-between items-start mb-5">
-                            <h3 className="font-bold text-gray-800 text-lg">Item #{index + 1}</h3>
-                            {items.length > 1 && (
-                                <button
-                                    type="button"
-                                    onClick={() => removeItem(item.id)}
-                                    className="text-red-500 hover:text-red-700 font-medium text-base px-4 py-2 rounded-lg hover:bg-red-50 transition-colors"
-                                >
-                                    Remove
-                                </button>
-                            )}
-                        </div>
-
-                        {/* MANUAL TOGGLE */}
-                        <div className="mb-6">
-                            <label className="flex items-center cursor-pointer">
-                                <div className="relative">
-                                    <input
-                                        type="checkbox"
-                                        checked={item.is_manual}
-                                        onChange={(e) =>
-                                            toggleManualMode(item.id, e.target.checked)
-                                        }
-                                        className="sr-only"
-                                    />
-                                    <div
-                                        className={`block w-14 h-8 rounded-full transition-colors ${
-                                            item.is_manual ? "bg-blue-600" : "bg-gray-300"
-                                        }`}
-                                    ></div>
-                                    <div
-                                        className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${
-                                            item.is_manual ? "transform translate-x-6" : ""
-                                        }`}
-                                    ></div>
-                                </div>
-                                <span className="ml-3 text-lg font-medium text-gray-700">
-                                    {item.is_manual ? "Manual Entry" : "Select Assembly"}
-                                </span>
-                            </label>
-                        </div>
-
-                        {!item.is_manual ? (
-                            // AUTOMATIC MODE - SELECT ASSEMBLY
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block mb-2 text-lg font-medium text-gray-800">
-                                        Assembly
-                                    </label>
-                                    {assemblies.length === 0 ? (
-                                        <div className="bg-gray-50 text-gray-500 rounded-lg p-4 text-center">
-                                            No assemblies available. Please create assemblies first.
-                                        </div>
-                                    ) : (
-                                        <select
-                                            value={item.assembly_id || ""}
-                                            onChange={(e) => {
-                                                const assemblyId = e.target.value;
-                                                const assembly = assemblies.find(
-                                                    (a) => a.id === assemblyId,
-                                                );
-                                                if (assembly) {
-                                                    updateItemPrice(item.id, {
-                                                        assembly_id: assemblyId,
-                                                        material_price: assembly.material_price,
-                                                        labor_price: assembly.labor_price,
-                                                    });
-                                                }
-                                            }}
-                                            className="w-full py-4 px-5 text-lg rounded-xl border border-gray-300 focus:ring-3 focus:ring-blue-500 focus:border-blue-500 bg-white appearance-none"
-                                            required
-                                        >
-                                            <option value="">Select Assembly</option>
-                                            {assemblies.map((assembly) => (
-                                                <option
-                                                    key={assembly.id}
-                                                    value={assembly.id}
-                                                    className="py-3"
-                                                >
-                                                    {assembly.assembly_name} - $
-                                                    {assembly.material_price + assembly.labor_price}
-                                                    /
-                                                    {assembly.pricing_type
-                                                        .replace("per_", "")
-                                                        .replace("_", " ")}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label className="block mb-2 text-lg font-medium text-gray-800">
-                                        Quantity
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={item.quantity}
-                                        onChange={(e) =>
-                                            updateItemPrice(item.id, {
-                                                quantity: parseFloat(e.target.value) || 0,
-                                            })
-                                        }
-                                        className="w-full py-4 px-5 text-lg rounded-xl border border-gray-300 focus:ring-3 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                                        placeholder="0"
-                                        min="0"
-                                        step="0.01"
-                                        required
-                                    />
-                                </div>
-                            </div>
-                        ) : (
-                            // MANUAL MODE - CUSTOM FIELDS
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block mb-2 text-lg font-medium text-gray-800">
-                                        Assembly Type
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={item.manual_assembly_type || ""}
-                                        onChange={(e) =>
-                                            updateItemPrice(item.id, {
-                                                manual_assembly_type: e.target.value,
-                                            })
-                                        }
-                                        className="w-full py-4 px-5 text-lg rounded-xl border border-gray-300 focus:ring-3 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                                        placeholder="e.g., Custom Repair, Setup Fee"
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block mb-2 text-lg font-medium text-gray-800">
-                                        Pricing Type
-                                    </label>
-                                    <select
-                                        value={item.manual_pricing_type || ""}
-                                        onChange={(e) =>
-                                            updateItemPrice(item.id, {
-                                                manual_pricing_type: e.target.value,
-                                            })
-                                        }
-                                        className="w-full py-4 px-5 text-lg rounded-xl border border-gray-300 focus:ring-3 focus:ring-blue-500 focus:border-blue-500 bg-white appearance-none"
-                                        required
-                                    >
-                                        <option value="">Select Pricing Type</option>
-                                        <option value="per_square">Per Square</option>
-                                        <option value="per_sq_ft">Per Sq Ft</option>
-                                        <option value="per_linear_ft">Per Linear Ft</option>
-                                        <option value="flat_rate">Flat Rate</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block mb-2 text-lg font-medium text-gray-800">
-                                        Description
-                                    </label>
-                                    <textarea
-                                        value={item.manual_descriptions || ""}
-                                        onChange={(e) =>
-                                            updateItemPrice(item.id, {
-                                                manual_descriptions: e.target.value,
-                                            })
-                                        }
-                                        className="w-full py-4 px-5 text-lg rounded-xl border border-gray-300 focus:ring-3 focus:ring-blue-500 focus:border-blue-500 bg-white min-h-[100px]"
-                                        placeholder="Enter detailed description of the work"
-                                        rows={3}
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div>
-                                        <label className="block mb-2 text-lg font-medium text-gray-800">
-                                            Quantity
-                                        </label>
-                                        <input
-                                            type="number"
-                                            value={item.quantity}
-                                            onChange={(e) =>
-                                                updateItemPrice(item.id, {
-                                                    quantity: parseFloat(e.target.value) || 0,
-                                                })
-                                            }
-                                            className="w-full py-4 px-5 text-lg rounded-xl border border-gray-300 focus:ring-3 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                                            placeholder="0"
-                                            min="0"
-                                            step="0.01"
-                                            required
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block mb-2 text-lg font-medium text-gray-800">
-                                            Material Price
-                                        </label>
-                                        <input
-                                            type="number"
-                                            value={item.material_price}
-                                            onChange={(e) =>
-                                                updateItemPrice(item.id, {
-                                                    material_price: parseFloat(e.target.value) || 0,
-                                                })
-                                            }
-                                            className="w-full py-4 px-5 text-lg rounded-xl border border-gray-300 focus:ring-3 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                                            placeholder="0.00"
-                                            min="0"
-                                            step="0.01"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block mb-2 text-lg font-medium text-gray-800">
-                                            Labor Price
-                                        </label>
-                                        <input
-                                            type="number"
-                                            value={item.labor_price}
-                                            onChange={(e) =>
-                                                updateItemPrice(item.id, {
-                                                    labor_price: parseFloat(e.target.value) || 0,
-                                                })
-                                            }
-                                            className="w-full py-4 px-5 text-lg rounded-xl border border-gray-300 focus:ring-3 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                                            placeholder="0.00"
-                                            min="0"
-                                            step="0.01"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ITEM TOTAL */}
-                        <div className="mt-6 pt-4 border-t border-gray-200">
-                            <div className="flex justify-between items-center">
-                                <span className="text-lg font-medium text-gray-600">
-                                    Item Total:
-                                </span>
-                                <span className="text-2xl font-bold text-blue-600">
-                                    ${item.total_price.toFixed(2)}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                ))}
             </div>
 
-            {/* SUMMARY */}
-            <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-6 shadow-sm border border-blue-200">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">Summary</h3>
-                <div className="space-y-3">
-                    <div className="flex justify-between text-lg">
-                        <span className="text-gray-600">Material Total:</span>
-                        <span className="font-semibold">${totals.material.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-lg">
-                        <span className="text-gray-600">Labor Total:</span>
-                        <span className="font-semibold">${totals.labor.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-lg pt-3 border-t border-blue-300">
-                        <span className="font-bold text-gray-800">Grand Total:</span>
-                        <span className="text-3xl font-bold text-blue-600">
-                            ${totals.total.toFixed(2)}
-                        </span>
+            {/* ESTIMATE ITEMS LIST */}
+            {estimateItems.length > 0 && (
+                <div>
+                    <h3 className="text-xl font-semibold mb-3">
+                        Estimate Items ({estimateItems.length})
+                    </h3>
+                    <div className="space-y-3">
+                        {estimateItems.map((item, idx) => (
+                            <div
+                                key={idx}
+                                className="border border-gray-600 rounded-lg p-4 bg-gray-800/50"
+                            >
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className="font-medium">
+                                            {item.is_manual
+                                                ? "Manual Item"
+                                                : assemblies.find((a) => a.id === item.assembly_id)
+                                                      ?.assembly_name || "—"}
+                                        </div>
+                                        {item.manual_descriptions && (
+                                            <div className="text-sm text-gray-300 mt-1 italic">
+                                                {item.manual_descriptions}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRemoveItem(idx)}
+                                        className="text-red-400 hover:text-red-300 text-lg"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                                <div className="mt-2 flex justify-between text-sm">
+                                    <span>
+                                        Material: $
+                                        {item.manual_material_price?.toFixed(2) || "0.00"} • Labor:
+                                        ${item.manual_labor_price?.toFixed(2) || "0.00"}
+                                    </span>
+                                    <span className="font-semibold">
+                                        Total: $
+                                        {item.manual_material_price! + item.manual_labor_price!}
+                                        .00
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
+            )}
+
+            {/* ACTIVE STATUS */}
+            <div className="flex items-center mt-2">
+                <input
+                    type="checkbox"
+                    id="is_finalized"
+                    name="is_finalized"
+                    checked={isFinalized}
+                    onChange={(e) => setIsFinalized(e.target.checked)}
+                    className="h-6 w-6 rounded text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="is_finalized" className="ml-3 text-lg font-medium">
+                    Finalized
+                </label>
             </div>
 
-            {/* ACTIONS */}
-            <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                    type="button"
-                    onClick={() => {
-                        setIsDraft(true);
-                        handleSubmit({
-                            preventDefault: () => {},
-                            target: document.querySelector("form"),
-                        } as any);
-                    }}
-                    disabled={isSubmitting}
-                    className={`flex-1 py-5 rounded-xl font-bold text-lg transition-all ${
-                        isSubmitting
-                            ? "bg-gray-300 cursor-not-allowed"
-                            : "bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl"
-                    }`}
-                >
-                    {isSubmitting ? "Saving..." : "💾 Save Draft"}
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => {
-                        setIsDraft(false);
-                        handleSubmit({
-                            preventDefault: () => {},
-                            target: document.querySelector("form"),
-                        } as any);
-                    }}
-                    disabled={isSubmitting}
-                    className={`flex-1 py-5 rounded-xl font-bold text-lg transition-all ${
-                        isSubmitting
-                            ? "bg-gray-300 cursor-not-allowed"
-                            : "bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-xl"
-                    }`}
-                >
-                    {isSubmitting ? "Creating..." : "✅ Finalize Estimate"}
-                </button>
-            </div>
+            {/* SUBMIT */}
+            <button
+                type="submit"
+                disabled={!measurementSessionId || estimateItems.length === 0}
+                className={`btn w-full mt-6 py-4 text-lg rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                    !measurementSessionId || estimateItems.length === 0
+                        ? "bg-gray-600 cursor-not-allowed"
+                        : "bg-green-600 hover:bg-green-700"
+                }`}
+            >
+                Create Estimate
+            </button>
         </form>
     );
 }

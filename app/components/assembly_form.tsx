@@ -111,7 +111,6 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
         e.preventDefault();
 
         const formData = new FormData(e.target as HTMLFormElement);
-
         const result = await action(formData);
         if (!result?.ok) {
             toast({

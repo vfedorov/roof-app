@@ -5,11 +5,14 @@ import { supabase } from "@/lib/supabase/supabase";
 export default async function EstimatesPage() {
     const user = await getUser();
 
-    const query = supabase.from("estimates").select("*");
+    const query = supabase
+        .from("estimates")
+        .select("*, measurement_sessions(date, properties(name, address))");
 
-    // if (user.role === USER_ROLES.INSPECTOR) {
-    //     query = query.eq("created_by", user.id);
-    // }
+    // properties:property_id (
+    //   name,
+    //   address
+    // )
 
     const { data: estimates } = await query;
     return (
@@ -22,14 +25,30 @@ export default async function EstimatesPage() {
             </div>
 
             <div className="list">
-                {estimates?.map((i) => {
+                {estimates?.map((est) => {
+                    console.log("Test output", est.measurement_sessions?.properties?.name);
+                    // const property = est.measurement_sessions?.[0]?.properties?.[0];
+                    // console.log("property", property);
+                    // const propertyName = property?.name || "No property name";
+                    // console.log("propertyName", propertyName);
+                    // const propertyAddress = property?.address || "No address";
+                    // console.log("propertyAddress", propertyAddress);
+
                     return (
-                        <Link key={i.id} href={`/estimates/${i.id}`} className="item">
-                            {/*<span>*/}
-                            {/*    <strong>{i.properties?.name}</strong>*/}
-                            {/*</span>*/}
+                        <Link key={est.id} href={`/estimates/${est.id}`} className="item">
+                            <span>
+                                <strong>
+                                    {est.measurement_sessions?.properties?.name} •{" "}
+                                    {est.measurement_sessions?.properties?.address} •{" "}
+                                    {new Date(est.measurement_sessions?.date).toLocaleDateString()}{" "}
+                                    <span className="text-gray-400 font-normal">
+                                        ({new Date(est.created_at).toLocaleDateString()}{" "}
+                                        {est.is_finalized ? "Finalized" : "Draft"})
+                                    </span>
+                                </strong>
+                            </span>
                             {/*<span className="details">*/}
-                            {/*    Inspector: {i.users?.name} | Date: {i.date}*/}
+                            {/*    ({est.is_finalized ? "Finalized" : "Draft"})*/}
                             {/*</span>*/}
                         </Link>
                     );

@@ -264,17 +264,86 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
         setEstimateItems(estimateItems.filter((_, i) => i !== index));
     };
 
+    useEffect(() => {
+        const loadEstimateData = async () => {
+            if (!estimate?.id) return;
+
+            try {
+                const { data: estimateData, error } = await supabase
+                    .from("estimates")
+                    .select(
+                        `
+                        *,                      
+                        estimate_items!estimate_id(
+                            *,
+                            assemblies!assembly_id(assembly_name, assembly_type, pricing_type, material_price, labor_price)
+                        )
+                    `,
+                    )
+                    .eq("id", estimate.id)
+                    .single();
+
+                if (error) throw error;
+
+                // Set form values
+                setInspectionId(estimateData.inspection_id || "");
+                setMeasurementSessionId(estimateData.measurement_session_id || "");
+                setIsFinalized(estimateData.is_finalized);
+
+                // Load items
+                if (estimateData.estimate_items && estimateData.estimate_items.length > 0) {
+                    const items = (
+                        Array.isArray(estimateData.estimate_items)
+                            ? estimateData.estimate_items
+                            : [estimateData.estimate_items]
+                    ).map((item: any) => ({
+                        id: item.id,
+                        assembly_id: item.assembly_id,
+                        manual_assembly_type: item.is_manual
+                            ? item.manual_assembly_type
+                            : item.assemblies.assembly_type,
+                        manual_pricing_type: item.is_manual
+                            ? item.manual_pricing_type
+                            : item.assemblies.pricing_type,
+                        manual_material_price: item.is_manual
+                            ? item.manual_material_price
+                            : item.assemblies.material_price,
+                        manual_labor_price: item.is_manual
+                            ? item.manual_labor_price
+                            : item.assemblies.labor_price,
+                        manual_descriptions: item.is_manual ? item.manual_descriptions : "",
+                        is_manual: item.is_manual,
+                    }));
+                    setEstimateItems(items);
+                }
+            } catch (error) {
+                console.error("Error loading estimate data:", error);
+                toast({
+                    title: "Error",
+                    description: "Failed to load estimate data",
+                    variant: "destructive",
+                });
+            }
+        };
+
+        loadEstimateData();
+    }, [estimate?.id]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const formData = new FormData(e.target as HTMLFormElement);
-        console.log("formData", formData);
+
+        if (estimate?.id) {
+            formData.append("estimate_id", estimate.id);
+        }
+
         // Append estimate items manually
         estimateItems.forEach((item, idx) => {
             formData.append(`items[${idx}][assembly_id]`, item.assembly_id || "");
             formData.append(`items[${idx}][manual_assembly_type]`, item.manual_assembly_type || "");
             formData.append(`items[${idx}][manual_pricing_type]`, item.manual_pricing_type || "");
             formData.append(
-                `items[${idx}][material_price]`,
+                `items[${idx}][manual_material_price]`,
                 String(item.manual_material_price || null),
             );
             formData.append(
@@ -286,8 +355,6 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
         });
 
         const result = await action(formData);
-        console.log("handleSubmit formData", formData);
-        console.log("result", result);
 
         if (!result?.ok) {
             toast({
@@ -524,9 +591,15 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                                     <div>
                                         <div className="font-medium">
                                             {item.is_manual
-                                                ? "Manual Item"
-                                                : assemblies.find((a) => a.id === item.assembly_id)
-                                                      ?.assembly_name || "—"}
+                                                ? `Manual Item (${item.manual_assembly_type})`
+                                                : (() => {
+                                                      const assembly = assemblies.find(
+                                                          (a) => a.id === item.assembly_id,
+                                                      );
+                                                      return assembly
+                                                          ? `${assembly.assembly_name} (${assembly.assembly_type})`
+                                                          : "—";
+                                                  })()}
                                         </div>
                                         {item.manual_descriptions && (
                                             <div className="text-sm text-gray-300 mt-1 italic">
@@ -585,7 +658,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                         : "bg-green-600 hover:bg-green-700"
                 }`}
             >
-                Create Estimate
+                {estimate ? "Update Estimate" : "Create Estimate"}
             </button>
         </form>
     );

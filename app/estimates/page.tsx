@@ -26,14 +26,6 @@ export default async function EstimatesPage() {
 
             <div className="list">
                 {estimates?.map((est) => {
-                    console.log("Test output", est.measurement_sessions?.properties?.name);
-                    // const property = est.measurement_sessions?.[0]?.properties?.[0];
-                    // console.log("property", property);
-                    // const propertyName = property?.name || "No property name";
-                    // console.log("propertyName", propertyName);
-                    // const propertyAddress = property?.address || "No address";
-                    // console.log("propertyAddress", propertyAddress);
-
                     return (
                         <Link key={est.id} href={`/estimates/${est.id}`} className="item">
                             <span>

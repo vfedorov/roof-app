@@ -3,21 +3,41 @@ import { computeOverallCondition } from "@/lib/inspections/getInspectionSections
 import Link from "next/link";
 
 export default async function InspectorDashboard({ userId }: { userId: string }) {
-    const [{ data: properties }, { data: inspections }, { data: measurements }] = await Promise.all(
-        [
-            supabase.from("properties").select("id, name"),
-            supabase
-                .from("inspections")
-                .select(
-                    "id, date, properties:property_id (id, name), inspection_status!inner (status_types (status_name))",
-                )
-                .eq("inspector_id", userId),
-            supabase
-                .from("measurement_sessions")
-                .select("*, properties:property_id (id, name)")
-                .eq("created_by", userId),
-        ],
-    );
+    const [
+        { data: properties },
+        { data: inspections },
+        { data: measurements },
+        { data: estimates },
+    ] = await Promise.all([
+        supabase.from("properties").select("id, name"),
+        supabase
+            .from("inspections")
+            .select(
+                "id, date, properties:property_id (id, name), inspection_status!inner (status_types (status_name))",
+            )
+            .eq("inspector_id", userId),
+        supabase
+            .from("measurement_sessions")
+            .select("*, properties:property_id (id, name)")
+            .eq("created_by", userId),
+        supabase.from("estimates").select(
+            `
+            *,
+            inspections!inspection_id(
+                date,
+                properties!property_id(name, address),
+                users!inspector_id(name)
+            ),
+            measurement_sessions!measurement_session_id(
+                id,
+                date,
+                properties!property_id(name, address),
+                users!created_by(name)
+            ),
+            users!created_by(name)
+        `,
+        ),
+    ]);
 
     let sectionsByInspection: Record<string, Array<{ condition: string | null }>> = {};
 
@@ -100,7 +120,7 @@ export default async function InspectorDashboard({ userId }: { userId: string })
             {measurements && measurements.length > 0 && (
                 <>
                     <h2 className="text-xl font-semibold mb-3">Measurements</h2>
-                    <div className="space-y-3">
+                    <div className="space-y-3 mb-10">
                         {measurements.map((p) => (
                             <Link
                                 key={p.id}
@@ -109,6 +129,27 @@ export default async function InspectorDashboard({ userId }: { userId: string })
                             >
                                 {p.properties?.name ?? "Nothing here"} {" - "}
                                 {new Date(p.date).toLocaleDateString()}
+                            </Link>
+                        ))}
+                    </div>
+                </>
+            )}
+
+            {estimates && estimates.length > 0 && (
+                <>
+                    <h2 className="text-xl font-semibold mb-3">Estimates</h2>
+                    <div className="space-y-3 mb-10">
+                        {estimates.map((est) => (
+                            <Link
+                                key={est.id}
+                                href={`/estimates/${est.id}`}
+                                className="block border p-4 rounded"
+                            >
+                                {est.measurement_sessions?.properties?.name} •{" "}
+                                {est.measurement_sessions?.properties?.address} •{" "}
+                                {new Date(est.measurement_sessions?.date).toLocaleDateString()} (
+                                {new Date(est.created_at).toLocaleDateString()}{" "}
+                                {est.is_finalized ? "Finalized" : "Draft"})
                             </Link>
                         ))}
                     </div>

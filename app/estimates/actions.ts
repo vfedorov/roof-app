@@ -215,3 +215,17 @@ export async function getEstimateById(id: string) {
 
     return estimate;
 }
+
+export async function deleteEstimate(id: string) {
+    // const user = await getUser();
+    // if (!user || user.role !== USER_ROLES.ADMIN) {
+    //     throw new Error("Not allowed");
+    // }
+
+    const { error } = await supabase.from("estimates").delete().eq("id", id);
+
+    if (error) {
+        return { ok: false, message: error.message };
+    }
+    return { ok: true };
+}

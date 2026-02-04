@@ -26,127 +26,6 @@ interface EstimateItem {
     area?: number;
 }
 
-export interface CostCalculationResult {
-    materialCost: number;
-    laborCost: number;
-    totalCost: number;
-    pricingType: string;
-    pricingUnit: string;
-    calculatedQuantity: number;
-    unitMaterialPrice: number;
-    unitLaborPrice: number;
-}
-
-/**
- * Рассчитывает стоимость для одного элемента сметы на основе измерений
- */
-function calculateItemCost(item: EstimateItem, shapes: Shape[]): CostCalculationResult {
-    // Для ручных элементов используем прямые значения
-    console.log("calculateItemCost item", item);
-    if (item.is_manual) {
-        const materialCost = item.manual_material_price || 0;
-        const laborCost = item.manual_labor_price || 0;
-        const pricingType = item.manual_pricing_type || "fixed";
-
-        return {
-            materialCost,
-            laborCost,
-            totalCost: materialCost + laborCost,
-            pricingType,
-            pricingUnit: formatPricingType(pricingType),
-            calculatedQuantity: 1,
-            unitMaterialPrice: materialCost,
-            unitLaborPrice: laborCost,
-        };
-    }
-
-    // Для сборок используем данные из базы и измерения
-    const assembly = item.assemblies;
-    if (!assembly) {
-        return {
-            materialCost: 0,
-            laborCost: 0,
-            totalCost: 0,
-            pricingType: "fixed",
-            pricingUnit: "item",
-            calculatedQuantity: 0,
-            unitMaterialPrice: 0,
-            unitLaborPrice: 0,
-        };
-    }
-
-    const pricingType = assembly.pricing_type;
-    let calculatedQuantity = 1; // по умолчанию 1 единица
-
-    // Рассчитываем количество/площадь на основе измерений
-    if (pricingType === "per_sq_ft" || pricingType === "per_square") {
-        console.log("per_sq_ft/per_square");
-        calculatedQuantity = calculateTotalArea(shapes, item);
-    } else if (pricingType === "per_linear_ft") {
-        console.log("per_linear_ft");
-        calculatedQuantity = calculateTotalLength(shapes, item);
-    }
-    console.log("calculatedQuantity", calculatedQuantity);
-
-    // Применяем отходы для материала
-    const wasteFactor = 1 + getAverageWastePercentage(shapes) / 100;
-
-    const unitMaterialPrice = assembly.material_price || 0;
-    const unitLaborPrice = assembly.labor_price || 0;
-
-    const materialCost = unitMaterialPrice * calculatedQuantity * wasteFactor;
-    const laborCost = unitLaborPrice * calculatedQuantity;
-
-    return {
-        materialCost: Math.round(materialCost * 100) / 100,
-        laborCost: Math.round(laborCost * 100) / 100,
-        totalCost: Math.round((materialCost + laborCost) * 100) / 100,
-        pricingType,
-        pricingUnit: formatPricingType(pricingType),
-        calculatedQuantity: Math.round(calculatedQuantity * 100) / 100,
-        unitMaterialPrice,
-        unitLaborPrice,
-    };
-}
-
-/**
- * Рассчитывает общую площадь измерений для элемента
- */
-function calculateTotalArea(shapes: Shape[], item: EstimateItem): number {
-    return shapes
-        .filter(
-            (shape) =>
-                shape.surface_type === "siding area" && item.assemblies?.assembly_type === "siding",
-        )
-        .reduce((sum, shape) => {
-            // magnitude уже содержит площадь для площадных фигур
-            return sum + 0; //(shape.magnitude || 0);
-        }, 0);
-}
-
-/**
- * Рассчитывает общую длину измерений для элемента
- */
-function calculateTotalLength(shapes: Shape[], item: EstimateItem): number {
-    // Для линейных измерений magnitude содержит длину
-    return shapes
-        .filter((shape) => shape.shape_type === "line" || shape.shape_type === "polyline")
-        .reduce((sum, shape) => sum + 1, 0); //(shape.magnitude || 0)
-}
-
-/**
- * Получает средний процент отходов из измерений
- */
-function getAverageWastePercentage(shapes: Shape[]): number {
-    if (shapes.length === 0) return 0;
-
-    const totalWaste = shapes.reduce((sum, shape) => sum + (shape.waste_percentage || 0), 0);
-    return totalWaste / shapes.length;
-}
-
-/**
- * Форматирует тип ценообразования для отображения
- */
 function formatPricingType(pricingType: string): string {
     const formats: Record<string, string> = {
         per_sq_ft: "sq ft",
@@ -157,41 +36,6 @@ function formatPricingType(pricingType: string): string {
     return formats[pricingType] || pricingType.replace(/_/g, " ");
 }
 
-/**
- * Основная функция: рассчитывает стоимость для всех элементов сметы
- */
-export function calculateEstimateCosts(
-    estimateItems: EstimateItem[],
-    shapes: Shape[],
-): CostCalculationResult[] {
-    return estimateItems.map((item) => calculateItemCost(item, shapes));
-}
-
-/**
- * Рассчитывает итоговую сумму сметы
- */
-export function calculateTotalEstimateCost(costs: CostCalculationResult[]): {
-    totalMaterial: number;
-    totalLabor: number;
-    grandTotal: number;
-} {
-    const totals = costs.reduce(
-        (acc, cost) => ({
-            totalMaterial: acc.totalMaterial + cost.materialCost,
-            totalLabor: acc.totalLabor + cost.laborCost,
-            grandTotal: acc.grandTotal + cost.totalCost,
-        }),
-        { totalMaterial: 0, totalLabor: 0, grandTotal: 0 },
-    );
-
-    return {
-        totalMaterial: Math.round(totals.totalMaterial * 100) / 100,
-        totalLabor: Math.round(totals.totalLabor * 100) / 100,
-        grandTotal: Math.round(totals.grandTotal * 100) / 100,
-    };
-}
-
-// **********************************************************************************
 interface ShapeDimension {
     magnitude: number;
     waste_percentage: number;
@@ -200,7 +44,7 @@ interface ShapeDimension {
     surface_type: string;
 }
 
-export interface CostCalculationResultZ {
+export interface CostCalculationResult {
     materialCost: number;
     laborCost: number;
     totalCost: number;
@@ -236,7 +80,11 @@ function calculateSurfaceQuantity(
         .filter((shape) => {
             const matchesSurface = shape.surface_type?.includes(surfaceTypeFilter);
             const matchesShape = !shapeTypeFilter || shape.shape_type === shapeTypeFilter;
-            return matchesSurface && matchesShape;
+            if (surfaceTypeFilter) {
+                return matchesSurface && matchesShape;
+            } else {
+                return matchesShape;
+            }
         })
         .reduce((sum, shape) => {
             let baseQuantity = shape.magnitude;
@@ -250,13 +98,11 @@ function calculateSurfaceQuantity(
         }, 0);
 }
 
-function calculateItemCostZ(item: EstimateItem, shapesD: ShapeDimension[]): CostCalculationResultZ {
+function calculateItemCost(item: EstimateItem, shapesD: ShapeDimension[]): CostCalculationResult {
     let materialPrice = item.assemblies?.material_price || 0;
     let laborPrice = item.assemblies?.labor_price || 0;
     let pricingType = item.assemblies?.pricing_type || "";
     let assemblyType = item.assemblies?.assembly_type;
-    let materialCost = 0;
-    let laborCost = 0;
     let calculatedQuantity = 0;
 
     if (item.is_manual) {
@@ -271,58 +117,15 @@ function calculateItemCostZ(item: EstimateItem, shapesD: ShapeDimension[]): Cost
         laborPrice = Math.round(laborPrice) / 100;
     }
 
-    // if (assemblyType?.includes("roof")) {
-    //     const roof_sq = shapesD
-    //         .filter(
-    //             (shape) => shape.shape_type === "polygon" && shape.surface_type?.includes("roof"),
-    //         )
-    //         .reduce((sum, shape) => {
-    //             let magnitudeInSqFt = shape.magnitude;
-    //             if (shape.magnitude_type === "square") {
-    //                 magnitudeInSqFt = shape.magnitude * 100;
-    //             }
-    //
-    //             const withWaste =
-    //                 Math.round(magnitudeInSqFt * (100 + shape.waste_percentage)) / 100;
-    //             return sum + withWaste;
-    //         }, 0);
-    //     materialCost = (materialPrice || 0) * roof_sq;
-    //     laborCost = (laborPrice || 0) * roof_sq;
-    // }
-
-    if (assemblyType?.includes("roof")) {
+    if (assemblyType?.includes("roof") && !pricingType.includes("line")) {
         calculatedQuantity = calculateSurfaceQuantity(shapesD, "roof", "polygon");
-        materialCost = materialPrice * calculatedQuantity;
-        laborCost = laborPrice * calculatedQuantity;
-    } else if (assemblyType?.includes("siding")) {
+    } else if (assemblyType?.includes("siding") && !pricingType.includes("line")) {
         calculatedQuantity = calculateSurfaceQuantity(shapesD, "siding", "polygon");
-        materialCost = materialPrice * calculatedQuantity;
-        laborCost = laborPrice * calculatedQuantity;
-    } else if (
-        assemblyType?.includes("ridge") ||
-        assemblyType?.includes("trim") ||
-        assemblyType?.includes("starter") ||
-        assemblyType?.includes("corner") ||
-        assemblyType?.includes("j_channel")
-    ) {
-        const surfaceType = assemblyType.includes("ridge")
-            ? "ridge"
-            : assemblyType.includes("trim")
-              ? "trim"
-              : assemblyType.includes("starter")
-                ? "starter"
-                : assemblyType.includes("corner")
-                  ? "corner"
-                  : assemblyType.includes("j_channel")
-                    ? "j_channel"
-                    : "";
-        console.log("surfaceType", surfaceType);
-        if (surfaceType) {
-            calculatedQuantity = calculateSurfaceQuantity(shapesD, surfaceType);
-            materialCost = materialPrice * calculatedQuantity;
-            laborCost = laborPrice * calculatedQuantity;
-        }
+    } else {
+        calculatedQuantity = calculateSurfaceQuantity(shapesD, "", "line");
     }
+    const materialCost = materialPrice * calculatedQuantity;
+    const laborCost = laborPrice * calculatedQuantity;
     return {
         materialCost: Math.round(materialCost * 100) / 100,
         laborCost: Math.round(laborCost * 100) / 100,
@@ -335,10 +138,10 @@ function calculateItemCostZ(item: EstimateItem, shapesD: ShapeDimension[]): Cost
     };
 }
 
-export function calculateEstimateCostsZ(
+export function calculateEstimateCosts(
     estimateItems: EstimateItem[],
     shapes: Shape[],
 ): CostCalculationResult[] {
     const shapesDimensions = extractDimensions(shapes);
-    return estimateItems.map((item) => calculateItemCostZ(item, shapesDimensions));
+    return estimateItems.map((item) => calculateItemCost(item, shapesDimensions));
 }

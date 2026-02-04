@@ -102,7 +102,7 @@ export default function MobileHeader({ role }: { role: string }) {
                     <NavLink href="/measurements">Measurements</NavLink>
 
                     {role === USER_ROLES.ADMIN && <NavLink href="/assemblies">Assemblies</NavLink>}
-                    {role === USER_ROLES.ADMIN && <NavLink href="/estimates">Estimates</NavLink>}
+                    <NavLink href="/estimates">Estimates</NavLink>
                     {role === USER_ROLES.ADMIN && <NavLink href="/users">Users</NavLink>}
                     <LogoutButton />
                 </nav>

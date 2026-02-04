@@ -1,11 +1,9 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/supabase";
 import { getUser } from "@/lib/auth/auth";
-import {
-    calculateEstimateCostsZ,
-    calculateTotalEstimateCost,
-    extractDimensions,
-} from "@/lib/estimates/calculateCost";
+import { calculateEstimateCosts } from "@/lib/estimates/calculateCost";
+import { DeleteButton } from "@/app/components/delete-button";
+import { deleteEstimate } from "@/app/estimates/actions";
 
 export default async function EstimateDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -18,10 +16,11 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
             *,
             estimate_items!estimate_id(
                 *,
-                assemblies!assembly_id(assembly_name, assembly_type, pricing_type, material_price, labor_price)
+                assemblies!assembly_id(assembly_name, assembly_type, pricing_type, material_price, labor_price, assembly_categories!assembly_category(category_name))
             ),
             inspections!inspection_id(
                 date,
+                inspection_status!status_id(status_types!status_type_id(status_name)),
                 properties!property_id(name, address),
                 users!inspector_id(name)
             ),
@@ -59,13 +58,7 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
         .select("shape_type, waste_percentage, surface_type, magnitude")
         .eq("measurement_session_id", measurementSession.id);
 
-    const costs = calculateEstimateCostsZ(estimateItems, shapes || []);
-    const totals = calculateTotalEstimateCost(costs);
-    console.log("costs", costs);
-    // console.log("Totals", totals);
-    const test = extractDimensions(shapes || []);
-    console.log("My test", test);
-
+    const costs = calculateEstimateCosts(estimateItems, shapes || []);
     return (
         <div className="page gap-6 p-6 max-w-6xl mx-auto">
             <div className="flex flex-col gap-6">
@@ -82,28 +75,31 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
                         </h1>
                         <p className="text-sm text-gray-600 dark:text-gray-300">
                             Created by: {createdBy?.name || "Unknown"} on{" "}
-                            {new Date(estimate.created_at).toLocaleDateString()}
+                            {new Date(estimate.created_at).toLocaleDateString()} (
+                            {estimate.is_finalized ? "Finalized" : "Draft"})
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        {/*{user && [USER_ROLES.ADMIN].includes(user.role) && (*/}
-                        {/*    <Link href={`/estimates/${id}/edit`} className="btn">*/}
-                        {/*        Edit*/}
-                        {/*    </Link>*/}
-                        {/*)}*/}
                         <Link href={`/estimates/${id}/edit`} className="btn">
                             Edit
                         </Link>
-                        <Link href="/estimates" className="btn">
-                            Back to List
-                        </Link>
+                        <DeleteButton id={id} action={deleteEstimate} redirect_path="/estimates" />
                     </div>
                 </div>
 
                 {/* Inspection & Measurement Session Info */}
                 <div className="grid gap-4 md:grid-cols-2">
                     <div className="card">
-                        <h3 className="text-lg font-semibold mb-3">Inspection</h3>
+                        <h3 className="text-lg font-semibold mb-3">
+                            Inspection{" "}
+                            {inspection ? (
+                                <span className="text-gray-500">
+                                    ({inspection.inspection_status.status_types.status_name})
+                                </span>
+                            ) : (
+                                ""
+                            )}
+                        </h3>
                         {inspection ? (
                             <div className="space-y-2">
                                 <p>
@@ -159,15 +155,11 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
                         <div className="space-y-3">
                             {estimateItems.map((item: any, idx: number) => {
                                 const assembly = item.assemblies;
-                                const total = item.is_manual
-                                    ? (item.manual_material_price || 0) +
-                                      (item.manual_labor_price || 0)
-                                    : (assembly.material_price || 0) + (assembly.labor_price || 0);
 
                                 return (
                                     <div
                                         key={item.id}
-                                        className="border border-gray-600 rounded-lg p-4 bg-gray-800/50"
+                                        className="border border-gray-600 rounded-lg p-4"
                                     >
                                         <div className="flex justify-between items-start">
                                             <div>
@@ -175,14 +167,15 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
                                                     {item.is_manual
                                                         ? "Manual Item"
                                                         : assembly?.assembly_name || "—"}
-                                                    <span className="ml-2 text-sm text-gray-400">
-                                                        (
-                                                        {item.is_manual
-                                                            ? item.manual_assembly_type
-                                                            : assembly?.assembly_type}
-                                                        )
-                                                    </span>
                                                 </div>
+                                                <div className="text-sm text-gray-400">
+                                                    (
+                                                    {item.is_manual
+                                                        ? `${item.manual_assembly_type} - ${item.manual_pricing_type?.includes("sq") ? "area" : "linear"}`
+                                                        : `${assembly?.assembly_type || ""} - ${assembly?.assembly_categories.category_name}${assembly?.pricing_type ? ` - ${assembly.pricing_type?.includes("sq") ? "area" : "linear"}` : ""}`}
+                                                    )
+                                                </div>
+
                                                 {item.is_manual && item.manual_descriptions && (
                                                     <div className="text-sm text-gray-300 mt-1 italic">
                                                         {item.manual_descriptions}
@@ -227,9 +220,23 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <span className="font-bold text-lg">
-                                                    Total: ${total.toFixed(2)}
-                                                </span>
+                                                <div className="flex flex-col items-center">
+                                                    <span className="font-bold text-lg">Cost:</span>
+                                                    <div className="text-left mt-1 font-bold text-md">
+                                                        <div>
+                                                            Material: $
+                                                            {costs[idx].materialCost.toFixed(2)}
+                                                        </div>
+                                                        <div>
+                                                            Labor: $
+                                                            {costs[idx].laborCost.toFixed(2)}
+                                                        </div>
+                                                        <div>
+                                                            Total: $
+                                                            {costs[idx].totalCost.toFixed(2)}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

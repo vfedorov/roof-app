@@ -39,9 +39,6 @@ export default async function EstimatesPage() {
                                     </span>
                                 </strong>
                             </span>
-                            {/*<span className="details">*/}
-                            {/*    ({est.is_finalized ? "Finalized" : "Draft"})*/}
-                            {/*</span>*/}
                         </Link>
                     );
                 })}

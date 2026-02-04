@@ -55,8 +55,8 @@ interface EstimateItem {
     assembly_id?: string;
     manual_assembly_type?: "roofing" | "siding";
     manual_pricing_type?: "per_square" | "per_sq_ft" | "per_linear_ft";
-    manual_material_price?: number;
-    manual_labor_price?: number;
+    manual_material_price?: number | null;
+    manual_labor_price?: number | null;
     manual_descriptions?: string;
     is_manual?: boolean;
 }
@@ -77,16 +77,60 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
     const [assemblies, setAssemblies] = useState<Assembly[]>([]);
     const [inspections, setInspections] = useState<Inspection[]>([]);
     const [measurementSessions, setMeasurementSessions] = useState<MeasurementSession[]>([]);
+    const [properties, setProperties] = useState<any[]>([]);
+    const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isFinalized, setIsFinalized] = useState<boolean>(estimate?.is_finalize || false);
     const [estimateItems, setEstimateItems] = useState<EstimateItem[]>([]);
     const [newManualItem, setNewManualItem] = useState<Omit<EstimateItem, "is_manual">>({
         manual_assembly_type: "roofing",
         manual_pricing_type: "per_sq_ft",
-        manual_material_price: 0,
-        manual_labor_price: 0,
+        manual_material_price: null,
+        manual_labor_price: null,
         manual_descriptions: "",
     });
+
+    useEffect(() => {
+        const loadProperties = async () => {
+            const { data, error } = await supabase
+                .from("properties")
+                .select("id, name, address")
+                .order("name");
+
+            if (!error) {
+                setProperties(data || []);
+            }
+        };
+        loadProperties();
+    }, []);
+
+    // // Filtering inspections by Property
+    // useEffect(() => {
+    //     if (!selectedPropertyId) {
+    //         setInspections([]);
+    //         setInspectionId("");
+    //         return;
+    //     }
+    //
+    //     const filtered = inspections.filter((insp) => insp.properties?.id === selectedPropertyId);
+    //     setInspections(filtered);
+    //     setInspectionId("");
+    // }, [selectedPropertyId]);
+    //
+    // // Filtering measurement sessions by Property
+    // useEffect(() => {
+    //     if (!selectedPropertyId) {
+    //         setMeasurementSessions([]);
+    //         setMeasurementSessionId("");
+    //         return;
+    //     }
+    //
+    //     const filtered = measurementSessions.filter(
+    //         (sess) => sess.properties?.id === selectedPropertyId,
+    //     );
+    //     setMeasurementSessions(filtered);
+    //     setMeasurementSessionId("");
+    // }, [selectedPropertyId]);
 
     // Fetch data
     useEffect(() => {
@@ -219,6 +263,19 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
         );
         if (!assembly) return;
 
+        const exists = estimateItems.some(
+            (item) => !item.is_manual && item.assembly_id === assembly.id,
+        );
+
+        if (exists) {
+            toast({
+                title: "Already Added",
+                description: `${assembly.assembly_name} is already in the estimate.`,
+                variant: "warning",
+            });
+            return;
+        }
+
         const newItem: EstimateItem = {
             assembly_id: assembly.id,
             manual_assembly_type: assembly.assembly_type,
@@ -239,6 +296,15 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
     const handleAddManualItem = (e: React.FormEvent) => {
         e.preventDefault();
         if (!measurementSessionId || !inspectionId) return;
+
+        if (!newManualItem.manual_material_price && !newManualItem.manual_labor_price) {
+            toast({
+                title: "Empty price",
+                description: "At least one price field must be filled in.",
+                variant: "warning",
+            });
+            return;
+        }
 
         const item: EstimateItem = {
             ...newManualItem,
@@ -277,6 +343,10 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                         estimate_items!estimate_id(
                             *,
                             assemblies!assembly_id(assembly_name, assembly_type, pricing_type, material_price, labor_price)
+                        ),
+                        measurement_sessions!measurement_session_id(
+                            id,
+                            properties!property_id(id, name, address)
                         )
                     `,
                     )
@@ -286,6 +356,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                 if (error) throw error;
 
                 // Set form values
+                setSelectedPropertyId(estimateData.measurement_sessions?.properties.id);
                 setInspectionId(estimateData.inspection_id || "");
                 setMeasurementSessionId(estimateData.measurement_session_id || "");
                 setIsFinalized(estimateData.is_finalized);
@@ -379,61 +450,99 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
+            {/* PROPERTY */}
+            <div>
+                <label className="block mb-2 text-lg font-medium">Property</label>
+                <select
+                    value={selectedPropertyId}
+                    onChange={(e) => setSelectedPropertyId(e.target.value)}
+                    className="select w-full text-lg py-3 px-4 rounded-lg appearance-none border border-gray-600"
+                    required
+                >
+                    <option value="">Select Property</option>
+                    {properties.map((prop) => (
+                        <option key={prop.id} value={prop.id}>
+                            {prop.name} • {prop.address}
+                        </option>
+                    ))}
+                </select>
+            </div>
             {/* INSPECTION */}
             <div>
-                <label className="block mb-2 text-lg font-medium">Inspection</label>
+                <label className="block mb-2 text-lg font-medium">
+                    Inspection
+                    {!selectedPropertyId && (
+                        <span className="ml-2 text-sm text-gray-500">(Select Property first)</span>
+                    )}
+                </label>
                 {isLoading ? (
-                    <div className="bg-gray-800 rounded-lg h-12 animate-pulse" />
-                ) : inspections.length === 0 ? (
-                    <div className="bg-gray-800 text-gray-500 rounded-lg p-4">
-                        No inspections available. Please create an inspection first.
+                    <div className="rounded-lg h-12 animate-pulse" />
+                ) : inspections.filter((insp) => insp.properties?.id === selectedPropertyId)
+                      .length === 0 && selectedPropertyId ? (
+                    <div className="text-gray-500 rounded-lg p-4">
+                        No inspections available for this property.
                     </div>
                 ) : (
                     <select
                         name="inspection_id"
                         value={inspectionId}
                         onChange={(e) => setInspectionId(e.target.value)}
-                        className="select w-full text-lg py-3 px-4 rounded-lg appearance-none border border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-800 text-white"
+                        disabled={!selectedPropertyId}
+                        className={`select w-full text-lg py-3 px-4 rounded-lg appearance-none border border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                            !selectedPropertyId ? "text-gray-500 cursor-not-allowed" : ""
+                        }`}
                         required
                     >
                         <option value="">Select Inspection</option>
-                        {inspections.map((insp) => (
-                            <option key={insp.id} value={insp.id} className="py-2">
-                                {insp.properties?.name}•{insp.properties?.address}•
-                                {insp.users?.name} ({new Date(insp.date).toLocaleDateString()})
-                            </option>
-                        ))}
+                        {inspections
+                            .filter((insp) => insp.properties?.id === selectedPropertyId)
+                            .map((insp) => (
+                                <option key={insp.id} value={insp.id} className="py-2">
+                                    {insp.users?.name} ({new Date(insp.date).toLocaleDateString()})
+                                </option>
+                            ))}
                     </select>
                 )}
             </div>
 
             {/* MEASUREMENT SESSION */}
             <div>
-                <label className="block mb-2 text-lg font-medium">Measurement Session</label>
+                <label className="block mb-2 text-lg font-medium">
+                    Measurement Session
+                    {!selectedPropertyId && (
+                        <span className="ml-2 text-sm text-gray-500">
+                            {!selectedPropertyId
+                                ? "(Select Property first)"
+                                : "(Select Inspection first)"}
+                        </span>
+                    )}
+                </label>
                 {isLoading ? (
-                    <div className="bg-gray-800 rounded-lg h-12 animate-pulse" />
-                ) : measurementSessions.length === 0 ? (
-                    <div className="bg-gray-800 text-gray-500 rounded-lg p-4">
-                        {/*{inspectionId*/}
-                        {/*    ? " for this inspection."*/}
-                        {/*    : "Select an inspection first."}*/}
-                        No measurement sessions.
+                    <div className="rounded-lg h-12 animate-pulse" />
+                ) : measurementSessions.filter((sess) => sess.properties?.id === selectedPropertyId)
+                      .length === 0 && selectedPropertyId ? (
+                    <div className="text-gray-500 rounded-lg p-4">
+                        No measurement sessions for this property.
                     </div>
                 ) : (
                     <select
                         name="measurement_session_id"
                         value={measurementSessionId}
                         onChange={(e) => setMeasurementSessionId(e.target.value)}
-                        className="select w-full text-lg py-3 px-4 rounded-lg appearance-none border border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-800 text-white"
+                        disabled={!selectedPropertyId}
+                        className={`select w-full text-lg py-3 px-4 rounded-lg appearance-none border border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                            !selectedPropertyId ? "text-gray-500 cursor-not-allowed" : ""
+                        }`}
                         required
                     >
                         <option value="">Select Session</option>
-                        {measurementSessions.map((sess) => (
-                            <option key={sess.id} value={sess.id} className="py-2">
-                                {sess.properties?.name}•{sess.properties?.address}•
-                                {sess.users?.name} ({new Date(sess.date).toLocaleDateString()})
-                            </option>
-                        ))}
+                        {measurementSessions
+                            .filter((sess) => sess.properties?.id === selectedPropertyId)
+                            .map((sess) => (
+                                <option key={sess.id} value={sess.id} className="py-2">
+                                    {sess.users?.name} ({new Date(sess.date).toLocaleDateString()})
+                                </option>
+                            ))}
                     </select>
                 )}
             </div>
@@ -442,9 +551,9 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
             <div>
                 <h3 className="text-xl font-semibold mb-3">Add Line Item from Assembly</h3>
                 {isLoading ? (
-                    <div className="bg-gray-800 rounded-lg h-12 animate-pulse" />
+                    <div className="rounded-lg h-12 animate-pulse" />
                 ) : assemblies.length === 0 ? (
-                    <div className="bg-gray-800 text-gray-500 rounded-lg p-4">
+                    <div className="text-gray-500 rounded-lg p-4">
                         No active assemblies available. Please create assemblies first.
                     </div>
                 ) : (
@@ -455,7 +564,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                                 type="button"
                                 data-assembly-id={asm.id}
                                 onClick={handleAddFromAssembly}
-                                className="w-full text-left py-3 px-4 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-600 transition-colors text-lg"
+                                className="w-full text-left py-3 px-4 rounded-lg hover:bg-gray-700 border border-gray-600 transition-colors text-lg"
                             >
                                 {asm.assembly_name} — {asm.assembly_type} •{" "}
                                 {asm.assembly_categories?.category_name} • $
@@ -471,7 +580,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
             {/* ADD MANUAL ITEM */}
             <div>
                 <h3 className="text-xl font-semibold mb-3">Add Manual Line Item</h3>
-                <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                <div className="p-4 rounded-lg border border-gray-700">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                             <label className="block mb-2 text-sm font-medium">Assembly Type</label>
@@ -485,7 +594,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                                             | "siding",
                                     })
                                 }
-                                className="select w-full py-2 px-3 rounded-lg bg-gray-900 border border-gray-600 text-white"
+                                className="select w-full py-2 px-3 rounded-lg border border-gray-600"
                             >
                                 <option value="roofing">Roofing</option>
                                 <option value="siding">Siding</option>
@@ -502,7 +611,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                                         manual_pricing_type: e.target.value as any,
                                     })
                                 }
-                                className="select w-full py-2 px-3 rounded-lg bg-gray-900 border border-gray-600 text-white"
+                                className="select w-full py-2 px-3 rounded-lg border border-gray-600"
                             >
                                 <option value="per_square">Per Square</option>
                                 <option value="per_sq_ft">Per Sq Ft</option>
@@ -514,7 +623,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                             <label className="block mb-2 text-sm font-medium">Material Price</label>
                             <input
                                 type="number"
-                                value={newManualItem.manual_material_price}
+                                value={newManualItem.manual_material_price || ""}
                                 onChange={(e) =>
                                     setNewManualItem({
                                         ...newManualItem,
@@ -523,7 +632,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                                 }
                                 min="0"
                                 step="0.01"
-                                className="input w-full py-2 px-3 rounded-lg bg-gray-900 border border-gray-600 text-white"
+                                className="input w-full py-2 px-3 rounded-lg border border-gray-600"
                                 placeholder="0.00"
                             />
                         </div>
@@ -532,7 +641,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                             <label className="block mb-2 text-sm font-medium">Labor Price</label>
                             <input
                                 type="number"
-                                value={newManualItem.manual_labor_price}
+                                value={newManualItem.manual_labor_price || ""}
                                 onChange={(e) =>
                                     setNewManualItem({
                                         ...newManualItem,
@@ -541,7 +650,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                                 }
                                 min="0"
                                 step="0.01"
-                                className="input w-full py-2 px-3 rounded-lg bg-gray-900 border border-gray-600 text-white"
+                                className="input w-full py-2 px-3 rounded-lg border border-gray-600"
                                 placeholder="0.00"
                             />
                         </div>
@@ -559,7 +668,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                                         manual_descriptions: e.target.value,
                                     })
                                 }
-                                className="input w-full py-2 px-3 rounded-lg bg-gray-900 border border-gray-600 text-white"
+                                className="input w-full py-2 px-3 rounded-lg border border-gray-600"
                                 placeholder="e.g., misc repair"
                             />
                         </div>

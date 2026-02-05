@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/supabase-server";
 import puppeteerCore from "puppeteer-core";
 import * as os from "node:os";
-import { getUser } from "@/lib/auth/auth";
+import {
+    calculateEstimateCosts,
+    extractDimensions,
+    ShapeDimension,
+} from "@/lib/estimates/calculateCost";
 
 // --- CONFIGURATION ---
 const MAX_PHOTOS_PER_ESTIMATE = 6; // Define as needed for estimates
@@ -16,10 +20,32 @@ const CHROMIUM_TAR_URL =
 // --- TYPES ---
 type MeasurementShape = {
     id: string;
-    surface_type: string; // e.g., "roof area", "siding area", "ridge", "eave", etc.
+    surface_type: string;
     shape_type: "polygon" | "line";
     waste_percentage?: number | null;
     magnitude?: string | null;
+};
+
+type MeasurementImage = {
+    id: string;
+    image_url: string;
+    is_base_image: boolean;
+};
+
+type AssemblyCategory = {
+    id: string;
+    category_name: string;
+};
+
+type Assembly = {
+    id?: string;
+    assembly_name: string;
+    assembly_type?: "roofing" | "siding";
+    pricing_type?: "per_square" | "per_sq_ft" | "per_linear_ft";
+    material_price?: number | null;
+    labor_price?: number | null;
+    is_active?: boolean;
+    assembly_category?: AssemblyCategory;
 };
 
 type EstimateItem = {
@@ -32,11 +58,12 @@ type EstimateItem = {
     manual_descriptions?: string;
     is_manual?: boolean;
     // Add other fields as they might be fetched, e.g., from joined assemblies table
-    assembly_name?: string; // Fetched from assemblies table join
-    assembly_type?: "roofing" | "siding"; // Fetched from assemblies table join
-    pricing_type?: "per_square" | "per_sq_ft" | "per_linear_ft"; // Fetched from assemblies table join
-    material_price?: number; // Fetched from assemblies table join
-    labor_price?: number; // Fetched from assemblies table join
+    // assembly_name?: string; // Fetched from assemblies table join
+    // assembly_type?: "roofing" | "siding"; // Fetched from assemblies table join
+    // pricing_type?: "per_square" | "per_sq_ft" | "per_linear_ft"; // Fetched from assemblies table join
+    // material_price?: number; // Fetched from assemblies table join
+    // labor_price?: number; // Fetched from assemblies table join
+    assemblies?: Assembly;
 };
 
 type EstimateWithDetails = {
@@ -59,6 +86,7 @@ type EstimateWithDetails = {
         properties?: { name: string | null; address: string | null };
         users?: { name: string | null };
         measurement_shapes?: MeasurementShape[];
+        measurement_images?: MeasurementImage[];
     };
     estimate_items?: EstimateItem[];
     // Add other joined relations if needed
@@ -157,7 +185,10 @@ async function getBrowser() {
     });
 }
 
-function computeMeasurementSummary(shapes: MeasurementShape[]): MeasurementSummary {
+function computeMeasurementSummary(
+    shapesD: ShapeDimension[],
+    measurement_images: MeasurementImage[],
+): MeasurementSummary {
     const DAMAGE_TYPES = new Set(["roof damage", "siding damage"]);
     const LINEAR_TYPES = new Set(["trim", "ridge", "eave", "other"]);
     const ROOF_AREA_TYPES = new Set(["roof area"]);
@@ -174,24 +205,32 @@ function computeMeasurementSummary(shapes: MeasurementShape[]): MeasurementSumma
         other: 0,
     };
 
-    const images: string[] = [];
+    const images = measurement_images
+        .filter((img) => img.image_url)
+        .sort((a, b) => {
+            if (a.is_base_image && !b.is_base_image) return -1;
+            if (!a.is_base_image && b.is_base_image) return 1;
+            return 0;
+        })
+        .slice(0, MAX_PHOTOS_PER_ESTIMATE)
+        .map((img) => img.image_url);
 
-    for (const shape of shapes) {
-        if (DAMAGE_TYPES.has(shape.surface_type)) continue;
+    for (const shapeD of shapesD) {
+        if (DAMAGE_TYPES.has(shapeD.surface_type)) continue;
 
-        if (shape.shape_type === "polygon") {
-            const area = 55; //shape.areaSqFt ?? 0;
-            // if (ROOF_AREA_TYPES.has(shape.surface_type)) {
-            roofArea = 54;
-            // } else if (SIDING_AREA_TYPES.has(shape.surface_type)) {
-            sidingArea = 53;
-            // } else {
-            otherArea = 52;
-            // }
-        } else if (shape.shape_type === "line") {
-            const length = 44; //shape.lengthFt ?? 0;
-            if (LINEAR_TYPES.has(shape.surface_type)) {
-                linearTotals[shape.surface_type as keyof typeof linearTotals] = 5;
+        if (shapeD.shape_type === "polygon") {
+            const area = shapeD.magnitude ?? 0;
+            if (ROOF_AREA_TYPES.has(shapeD.surface_type)) {
+                roofArea += area;
+            } else if (SIDING_AREA_TYPES.has(shapeD.surface_type)) {
+                sidingArea += area;
+            } else {
+                otherArea += area;
+            }
+        } else if (shapeD.shape_type === "line") {
+            const length = shapeD.magnitude ?? 0;
+            if (LINEAR_TYPES.has(shapeD.surface_type)) {
+                linearTotals[shapeD.surface_type as keyof typeof linearTotals] += length;
             }
         }
     }
@@ -230,17 +269,43 @@ export async function GET(request: NextRequest, context: any) {
         .select(
             `
             *,
-            inspections!inspection_id(date, summary_notes, roof_type, properties(name, address), users(name)),
-            measurement_sessions!measurement_session_id(date, properties(name, address), users(name),
-                measurement_shapes!measurement_session_id(*)),
-            estimate_items!estimate_id(*, assemblies!assembly_id(assembly_name, assembly_type, pricing_type, material_price, labor_price))
+            inspections!inspection_id(
+                date,
+                summary_notes,
+                roof_type,
+                properties(name, address),
+                users(name)
+            ),
+            measurement_sessions!measurement_session_id(
+                date,
+                properties(name, address),
+                users(name),
+                measurement_shapes!measurement_session_id(
+                    id,
+                    surface_type,
+                    shape_type,
+                    waste_percentage,
+                    magnitude
+                ),
+                measurement_images!measurement_session_id(id, image_url, is_base_image)
+            ),
+            estimate_items!estimate_id(
+                *,
+                assemblies!assembly_id(
+                    assembly_name,
+                    assembly_type,
+                    pricing_type,
+                    material_price,
+                    labor_price,
+                    is_active,
+                    assembly_categories!assembly_category(category_name)
+                )
+            )
         `,
         )
         .eq("id", id)
         .single();
-    if (estimate) {
-        console.log("We've got Estimate");
-    }
+
     if (estimateError || !estimate) {
         console.error("Error fetching estimate:", estimateError);
         return NextResponse.json(
@@ -251,47 +316,30 @@ export async function GET(request: NextRequest, context: any) {
 
     // --- 2. PREPARE DATA FOR PDF ---
     // Calculate totals, format data, etc.
-    const { totalMaterialCost, totalLaborCost, totalCost } = calculateTotals(
-        estimate.estimate_items || [],
-    );
+    // const { totalMaterialCost, totalLaborCost, totalCost } = calculateTotals(
+    //     estimate.estimate_items || [],
+    // );
+
     // You can add more calculations or data transformations here
     const shapes = estimate.measurement_sessions?.measurement_shapes || [];
-    const measurementSummary = computeMeasurementSummary(shapes);
-    // --- 3. UPDATE STATUS IF NEEDED ---
-    // Example logic to update status upon PDF generation
-    // Adjust the status name and logic according to your requirements
-    try {
-        const { data: statusData, error: statusError } = await supabaseServer
-            .from("status_types")
-            .select("id")
-            .eq("status_name", "Report Generated") // Or another appropriate status for estimates
-            .single();
+    const images = estimate.measurement_sessions?.measurement_images || [];
+    const shapeDimension = extractDimensions(shapes);
+    const measurementSummary = computeMeasurementSummary(shapeDimension, images);
 
-        if (statusError || !statusData) {
-            console.error("Status 'Report Generated' not found:", statusError);
-            // Decide whether to continue or fail if status is not found
-        } else {
-            const user = await getUser();
-            // Update estimate status if applicable
-            // await supabaseServer.from("estimates").update({...}).eq("id", id);
+    // Рассчитываем стоимость каждой строки
+    const lineItemCosts = calculateEstimateCosts(estimate.estimate_items || [], shapes);
 
-            // Or update associated inspection status if that's the pattern
-            if (estimate.inspections?.id) {
-                // Assuming inspection_id links to an inspection_status table
-                // Example: Update inspection status
-                // await supabaseServer.from("inspection_status").update({...}).eq("inspection_id", estimate.inspections.id);
-            }
-        }
-    } catch (error) {
-        console.error("Failed to update status:", error);
-        // Log error but don't necessarily stop PDF generation unless critical
-    }
+    // Суммируем итоги
+    const totalMaterialCost = lineItemCosts.reduce((sum, item) => sum + item.materialCost, 0);
+    const totalLaborCost = lineItemCosts.reduce((sum, item) => sum + item.laborCost, 0);
+    const totalCost = lineItemCosts.reduce((sum, item) => sum + item.totalCost, 0);
 
     // --- 4. BUILD HTML ---
     const html = buildEstimateHtml(
         estimate,
         { totalMaterialCost, totalLaborCost, totalCost },
         measurementSummary,
+        lineItemCosts,
     );
 
     // --- 5. GENERATE PDF ---
@@ -336,8 +384,8 @@ function calculateTotals(items: EstimateItem[]): {
     let totalLaborCost = 0;
 
     items.forEach((item) => {
-        const materialPrice = item.is_manual ? item.manual_material_price : item.material_price;
-        const laborPrice = item.is_manual ? item.manual_labor_price : item.labor_price;
+        const materialPrice = item.is_manual ? item.manual_material_price : 0; //item.material_price;
+        const laborPrice = item.is_manual ? item.manual_labor_price : 0; //item.labor_price;
 
         if (typeof materialPrice === "number") {
             totalMaterialCost += materialPrice;
@@ -358,6 +406,7 @@ function buildEstimateHtml(
     estimate: EstimateWithDetails,
     totals: { totalMaterialCost: number; totalLaborCost: number; totalCost: number },
     measurementSummary: MeasurementSummary,
+    lineItemCosts: { materialCost: number; laborCost: number; totalCost: number }[],
 ) {
     const generatedAt = new Date().toLocaleString();
     const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -449,7 +498,17 @@ function buildEstimateHtml(
   <p><strong>Inspector:</strong> ${inspections?.users?.name || "N/A"}</p>
   <p><strong>Date:</strong> ${formatDate(inspections?.date)}</p>
   <p><strong>Roof Type:</strong> ${inspections?.roof_type || "N/A"}</p> 
-  
+<!-- INSPECTION SUMMARY NOTES (if linked) -->
+${
+    inspections?.summary_notes
+        ? `
+<div class="section">
+  <h2>Inspection Summary Notes</h2>
+  <p>${inspections.summary_notes}</p>
+</div>
+`
+        : ""
+}  
   <h3>Measurement</h3>
   <p><strong>Inspector:</strong> ${measurement_sessions?.users?.name || "N/A"}</p>
   <p><strong>Date:</strong>${formatDate(measurement_sessions?.date)}</p>  
@@ -504,18 +563,6 @@ function buildEstimateHtml(
   }
 </div>
 
-<!-- INSPECTION SUMMARY NOTES (if linked) -->
-${
-    inspections?.summary_notes
-        ? `
-<div class="section">
-  <h2>Inspection Summary Notes</h2>
-  <p>${inspections.summary_notes}</p>
-</div>
-`
-        : ""
-}
-
 <!-- ESTIMATE ITEMS SECTION -->
 <div class="section">
   <h2>Estimate Details</h2>
@@ -534,33 +581,40 @@ ${
     <tbody>
       ${
           items
-              ?.map((item) => {
+              ?.map((item, idx) => {
+                  const cost = lineItemCosts[idx] || {
+                      materialCost: 0,
+                      laborCost: 0,
+                      totalCost: 0,
+                  };
                   const name = item.is_manual
                       ? `Manual Item: ${item.manual_descriptions || "N/A"}`
-                      : item.assembly_name || "N/A";
-
-                  const type = item.is_manual ? item.manual_assembly_type : item.assembly_type;
-                  const pricingType = item.is_manual ? item.manual_pricing_type : item.pricing_type;
-                  const materialPrice = item.is_manual
-                      ? item.manual_material_price
-                      : item.material_price;
-                  const laborPrice = item.is_manual ? item.manual_labor_price : item.labor_price;
-                  const total = (materialPrice || 0) + (laborPrice || 0);
+                      : item.assemblies?.assembly_name || "N/A";
+                  const type = item.is_manual
+                      ? item.manual_assembly_type
+                      : item.assemblies?.assembly_type || "N/A";
+                  const pricingType = item.is_manual
+                      ? item.manual_pricing_type
+                      : item.assemblies?.pricing_type || "N/A";
 
                   return `
-          <tr>
-            <td>${name}</td>
-            <td>${type || "N/A"}</td>
-            <td>${pricingType ? pricingType.replace(/_/g, " ") : "N/A"}</td>
-            <td>$${materialPrice?.toFixed(2) || "0.00"}</td>
-            <td>$${laborPrice?.toFixed(2) || "0.00"}</td>
-            <td>$${total.toFixed(2)}</td>
-          </tr>`;
+                  <tr>
+                    <td>${name}</td>
+                    <td>${type}</td>
+                    <td>${pricingType ? pricingType.replace(/_/g, " ") : "N/A"}</td>
+                    <td>$${cost.materialCost.toFixed(2)}</td>
+                    <td>$${cost.laborCost.toFixed(2)}</td>
+                    <td>$${cost.totalCost.toFixed(2)}</td>
+                  </tr>`;
               })
               .join("") || "<tr><td colspan='6'>No items found.</td></tr>"
       }
     </tbody>
   </table>
+
+
+
+
 
   <!-- TOTALS SECTION -->
   <div class="totals-section">

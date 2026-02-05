@@ -16,7 +16,14 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
             *,
             estimate_items!estimate_id(
                 *,
-                assemblies!assembly_id(assembly_name, assembly_type, pricing_type, material_price, labor_price, assembly_categories!assembly_category(category_name))
+                assemblies!assembly_id(
+                    assembly_name,
+                    assembly_type,
+                    pricing_type,
+                    material_price,
+                    labor_price,
+                    assembly_categories!assembly_category(category_name)
+                )
             ),
             inspections!inspection_id(
                 date,

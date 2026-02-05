@@ -36,7 +36,7 @@ function formatPricingType(pricingType: string): string {
     return formats[pricingType] || pricingType.replace(/_/g, " ");
 }
 
-interface ShapeDimension {
+export interface ShapeDimension {
     magnitude: number;
     waste_percentage: number;
     magnitude_type: string;

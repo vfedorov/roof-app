@@ -448,6 +448,10 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
         }
     };
 
+    const availableAssemblies = assemblies.filter((assembly) => {
+        return !estimateItems.some((item) => !item.is_manual && item.assembly_id === assembly.id);
+    });
+
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
             {/* PROPERTY */}
@@ -552,13 +556,13 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                 <h3 className="text-xl font-semibold mb-3">Add Line Item from Assembly</h3>
                 {isLoading ? (
                     <div className="rounded-lg h-12 animate-pulse" />
-                ) : assemblies.length === 0 ? (
+                ) : availableAssemblies.length === 0 ? (
                     <div className="text-gray-500 rounded-lg p-4">
-                        No active assemblies available. Please create assemblies first.
+                        All active assemblies have been added to the estimate.
                     </div>
                 ) : (
                     <div className="space-y-2">
-                        {assemblies.map((asm) => (
+                        {availableAssemblies.map((asm) => (
                             <button
                                 key={asm.id}
                                 type="button"
@@ -706,7 +710,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                                                           (a) => a.id === item.assembly_id,
                                                       );
                                                       return assembly
-                                                          ? `${assembly.assembly_name} (${assembly.assembly_type})`
+                                                          ? `${assembly.assembly_name} (${assembly.assembly_type} • ${assembly.assembly_categories?.category_name})`
                                                           : "—";
                                                   })()}
                                         </div>
@@ -719,7 +723,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                                     <button
                                         type="button"
                                         onClick={() => handleRemoveItem(idx)}
-                                        className="text-red-400 hover:text-red-300 text-lg"
+                                        className="text-red-400 hover:text-red-300 text-4xl"
                                     >
                                         ×
                                     </button>
@@ -728,7 +732,8 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                                     <span>
                                         Material: $
                                         {item.manual_material_price?.toFixed(2) || "0.00"} • Labor:
-                                        ${item.manual_labor_price?.toFixed(2) || "0.00"}
+                                        ${item.manual_labor_price?.toFixed(2) || "0.00"} /
+                                        {item.manual_pricing_type?.replace(/_/g, " ")}
                                     </span>
                                     <span className="font-semibold">
                                         Total: $

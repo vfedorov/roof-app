@@ -94,16 +94,32 @@ export default function MobileHeader({ role }: { role: string }) {
                 `}
             >
                 <nav className="p-4 pt-0 space-y-3">
-                    <NavLink href="/dashboard">Dashboard</NavLink>
-                    <NavLink href="/properties">Properties</NavLink>
-                    <NavLink href="/inspections">
+                    <NavLink href="/dashboard" onClickAction={() => setOpen(false)}>
+                        Dashboard
+                    </NavLink>
+                    <NavLink href="/properties" onClickAction={() => setOpen(false)}>
+                        Properties
+                    </NavLink>
+                    <NavLink href="/inspections" onClickAction={() => setOpen(false)}>
                         {role === USER_ROLES.ADMIN ? "Inspections" : "My Inspections"}
                     </NavLink>
-                    <NavLink href="/measurements">Measurements</NavLink>
+                    <NavLink href="/measurements" onClickAction={() => setOpen(false)}>
+                        Measurements
+                    </NavLink>
 
-                    {role === USER_ROLES.ADMIN && <NavLink href="/assemblies">Assemblies</NavLink>}
-                    <NavLink href="/estimates">Estimates</NavLink>
-                    {role === USER_ROLES.ADMIN && <NavLink href="/users">Users</NavLink>}
+                    {role === USER_ROLES.ADMIN && (
+                        <NavLink href="/assemblies" onClickAction={() => setOpen(false)}>
+                            Assemblies
+                        </NavLink>
+                    )}
+                    <NavLink href="/estimates" onClickAction={() => setOpen(false)}>
+                        Estimates
+                    </NavLink>
+                    {role === USER_ROLES.ADMIN && (
+                        <NavLink href="/users" onClickAction={() => setOpen(false)}>
+                            Users
+                        </NavLink>
+                    )}
                     <LogoutButton />
                 </nav>
             </div>

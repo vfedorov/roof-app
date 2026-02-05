@@ -35,7 +35,7 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
         )
         .eq("id", id)
         .single();
-
+    console.log("estimate", estimate);
     if (!estimate) {
         return (
             <div className="flex justify-center p-6">
@@ -144,6 +144,24 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
                     </div>
                 </div>
 
+                <div className="card">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <p className="text-sm uppercase tracking-wide text-gray-500">
+                                Reporting
+                            </p>
+                            <h2 className="text-lg font-semibold">PDF Report</h2>
+                        </div>
+                        <form action={`/api/estimates/${id}/report`} method="GET" target="_blank">
+                            <button className="btn" type="submit">
+                                Generate PDF Estimate
+                            </button>
+                        </form>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                        The reports will include everything that should be included.
+                    </p>
+                </div>
                 {/* Estimate Items */}
                 <div className="card">
                     <h3 className="text-xl font-semibold mb-4">

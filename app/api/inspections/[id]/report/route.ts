@@ -237,7 +237,7 @@ export async function GET(request: NextRequest, context: any) {
 // ------------------------------------------------------------
 function buildHtml(inspection: any, sections: PdfSection[], overallCondition: string) {
     const generatedAt = new Date().toLocaleString();
-    const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+    const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
     return `
 <!DOCTYPE html>

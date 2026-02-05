@@ -4,13 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 
-export default function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+export default function NavLink({
+    href,
+    children,
+    onClickAction,
+}: {
+    href: string;
+    children: React.ReactNode;
+    onClickAction?: () => void;
+}) {
     const pathname = usePathname();
     const isActive = pathname === href;
 
     return (
         <Link
             href={href}
+            onClick={onClickAction}
             className={clsx(
                 "block px-2 py-1 rounded transition-colors duration-200",
                 "text-gray-700 dark:text-gray-300",

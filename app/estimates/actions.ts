@@ -43,10 +43,14 @@ export async function createEstimate(formData: FormData) {
     ) {
         const assemblyId = formData.get(`items[${idx}][assembly_id]`) as string;
         const isManual = formData.get(`items[${idx}][is_manual]`) === "true";
+        const measurementShapeId = formData.get(`items[${idx}][measurement_shape_id]`) as
+            | string
+            | null;
 
         const item = {
             estimate_id: estimate.id,
             assembly_id: isManual ? null : assemblyId || null,
+            shape_id: measurementShapeId || null,
             is_manual: isManual,
 
             // Только для ручных
@@ -146,10 +150,14 @@ export async function updateEstimate(formData: FormData) {
     ) {
         const assemblyId = formData.get(`items[${idx}][assembly_id]`) as string;
         const isManual = formData.get(`items[${idx}][is_manual]`) === "true";
+        const measurementShapeId = formData.get(`items[${idx}][measurement_shape_id]`) as
+            | string
+            | null;
 
         const item = {
             estimate_id: estimateId,
             assembly_id: isManual ? null : assemblyId || null,
+            shape_id: measurementShapeId || null,
             is_manual: isManual,
 
             // Только для ручных

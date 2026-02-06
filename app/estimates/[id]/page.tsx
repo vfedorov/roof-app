@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/supabase";
-import { getUser } from "@/lib/auth/auth";
 import { calculateEstimateCosts } from "@/lib/estimates/calculateCost";
 import { DeleteButton } from "@/app/components/delete-button";
 import { deleteEstimate } from "@/app/estimates/actions";
+import React from "react";
 
 export default async function EstimateDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
-    const user = await getUser();
 
     const { data: estimate } = await supabase
         .from("estimates")
@@ -42,7 +41,6 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
         )
         .eq("id", id)
         .single();
-    console.log("estimate", estimate);
     if (!estimate) {
         return (
             <div className="flex justify-center p-6">
@@ -62,7 +60,7 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
 
     const { data: shapes } = await supabase
         .from("measurement_shapes")
-        .select("shape_type, waste_percentage, surface_type, magnitude")
+        .select("id, shape_type, waste_percentage, surface_type, magnitude, label")
         .eq("measurement_session_id", measurementSession.id);
 
     const costs = calculateEstimateCosts(estimateItems, shapes || []);
@@ -180,6 +178,7 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
                         <div className="space-y-3">
                             {estimateItems.map((item: any, idx: number) => {
                                 const assembly = item.assemblies;
+                                const shape = shapes?.find((s: any) => s.id === item.shape_id);
 
                                 return (
                                     <div
@@ -204,6 +203,18 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
                                                 {item.is_manual && item.manual_descriptions && (
                                                     <div className="text-sm text-gray-300 mt-1 italic">
                                                         {item.manual_descriptions}
+                                                    </div>
+                                                )}
+                                                {item.shape_id && shape && (
+                                                    <div className="text-xs text-gray-400 mt-1">
+                                                        {shape.label
+                                                            ? `From: "${shape.label}" (${shape.magnitude})`
+                                                            : `From: ${shape.surface_type} (${shape.magnitude})`}
+                                                    </div>
+                                                )}
+                                                {item.shape_id && !shape && (
+                                                    <div className="text-xs text-gray-400 mt-1">
+                                                        Shape data not available
                                                     </div>
                                                 )}
                                             </div>

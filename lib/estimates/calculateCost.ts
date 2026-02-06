@@ -1,4 +1,5 @@
 interface Shape {
+    id: string;
     shape_type: string;
     waste_percentage: number;
     surface_type: string;
@@ -24,6 +25,7 @@ interface EstimateItem {
     assemblies?: Assembly;
     quantity?: number;
     area?: number;
+    shape_id?: string;
 }
 
 function formatPricingType(pricingType: string): string {
@@ -37,6 +39,7 @@ function formatPricingType(pricingType: string): string {
 }
 
 export interface ShapeDimension {
+    id: string;
     magnitude: number;
     waste_percentage: number;
     magnitude_type: string;
@@ -62,6 +65,7 @@ export function extractDimensions(shapes: Shape[]): ShapeDimension[] {
             const magnitudeText = shape.magnitude?.toString() || "";
             const match = magnitudeText.match(/^([\d.]+)\s*(.+)$/);
             return {
+                id: shape.id,
                 magnitude: match && match[1] ? parseFloat(match[1]) : 0,
                 waste_percentage: shape.waste_percentage || 0,
                 magnitude_type: match && match[2] ? match[2] : "",
@@ -71,29 +75,18 @@ export function extractDimensions(shapes: Shape[]): ShapeDimension[] {
         });
 }
 
-function calculateSurfaceQuantity(
-    shapes: ShapeDimension[],
-    surfaceTypeFilter: string,
-    shapeTypeFilter?: string,
-): number {
+function calculateSurfaceQuantity(shapes: ShapeDimension[], item: EstimateItem): number {
     return shapes
         .filter((shape) => {
-            const matchesSurface = shape.surface_type?.includes(surfaceTypeFilter);
-            const matchesShape = !shapeTypeFilter || shape.shape_type === shapeTypeFilter;
-            if (surfaceTypeFilter) {
-                return matchesSurface && matchesShape;
-            } else {
-                return matchesShape;
-            }
+            const matchesShape = shape.id === item.shape_id;
+            return matchesShape;
         })
         .reduce((sum, shape) => {
             let baseQuantity = shape.magnitude;
             if (shape.magnitude_type?.includes("square")) {
                 baseQuantity = shape.magnitude * 100;
             }
-
             const withWaste = baseQuantity * (1 + (shape.waste_percentage || 0) / 100);
-
             return sum + withWaste;
         }, 0);
 }
@@ -102,14 +95,12 @@ function calculateItemCost(item: EstimateItem, shapesD: ShapeDimension[]): CostC
     let materialPrice = item.assemblies?.material_price || 0;
     let laborPrice = item.assemblies?.labor_price || 0;
     let pricingType = item.assemblies?.pricing_type || "";
-    let assemblyType = item.assemblies?.assembly_type;
     let calculatedQuantity = 0;
 
     if (item.is_manual) {
         materialPrice = item.manual_material_price || 0;
         laborPrice = item.manual_labor_price || 0;
         pricingType = item.manual_pricing_type || "";
-        assemblyType = item.manual_assembly_type;
     }
 
     if (pricingType.includes("square")) {
@@ -117,13 +108,7 @@ function calculateItemCost(item: EstimateItem, shapesD: ShapeDimension[]): CostC
         laborPrice = Math.round(laborPrice) / 100;
     }
 
-    if (assemblyType?.includes("roof") && !pricingType.includes("line")) {
-        calculatedQuantity = calculateSurfaceQuantity(shapesD, "roof", "polygon");
-    } else if (assemblyType?.includes("siding") && !pricingType.includes("line")) {
-        calculatedQuantity = calculateSurfaceQuantity(shapesD, "siding", "polygon");
-    } else {
-        calculatedQuantity = calculateSurfaceQuantity(shapesD, "", "line");
-    }
+    calculatedQuantity = calculateSurfaceQuantity(shapesD, item);
     const materialCost = materialPrice * calculatedQuantity;
     const laborCost = laborPrice * calculatedQuantity;
     return {

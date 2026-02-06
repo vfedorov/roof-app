@@ -24,6 +24,7 @@ type MeasurementShape = {
     shape_type: "polygon" | "line";
     waste_percentage?: number | null;
     magnitude?: string | null;
+    label?: string;
 };
 
 type MeasurementImage = {
@@ -64,6 +65,7 @@ type EstimateItem = {
     // material_price?: number; // Fetched from assemblies table join
     // labor_price?: number; // Fetched from assemblies table join
     assemblies?: Assembly;
+    shape_id?: string;
 };
 
 type EstimateWithDetails = {
@@ -262,46 +264,45 @@ export async function GET(request: NextRequest, context: any) {
     const { id } = await context.params;
 
     // --- 1. LOAD ESTIMATE DATA ---
-    // Fetch the estimate along with related data (inspections, measurement sessions, estimate items, etc.)
-    // This query needs to be adjusted based on your exact table structure and relationships
     const { data: estimate, error: estimateError } = await supabaseServer
         .from("estimates")
         .select(
             `
+        *,
+        inspections!inspection_id(
+            date,
+            summary_notes,
+            roof_type,
+            properties(name, address),
+            users(name)
+        ),
+        measurement_sessions!measurement_session_id(
+            date,
+            properties(name, address),
+            users(name),
+            measurement_shapes!measurement_session_id(
+                id,
+                surface_type,
+                shape_type,
+                waste_percentage,
+                magnitude,
+                label
+            ),
+            measurement_images!measurement_session_id(id, image_url, is_base_image)
+        ),
+        estimate_items!estimate_id(
             *,
-            inspections!inspection_id(
-                date,
-                summary_notes,
-                roof_type,
-                properties(name, address),
-                users(name)
-            ),
-            measurement_sessions!measurement_session_id(
-                date,
-                properties(name, address),
-                users(name),
-                measurement_shapes!measurement_session_id(
-                    id,
-                    surface_type,
-                    shape_type,
-                    waste_percentage,
-                    magnitude
-                ),
-                measurement_images!measurement_session_id(id, image_url, is_base_image)
-            ),
-            estimate_items!estimate_id(
-                *,
-                assemblies!assembly_id(
-                    assembly_name,
-                    assembly_type,
-                    pricing_type,
-                    material_price,
-                    labor_price,
-                    is_active,
-                    assembly_categories!assembly_category(category_name)
-                )
+            assemblies!assembly_id(
+                assembly_name,
+                assembly_type,
+                pricing_type,
+                material_price,
+                labor_price,
+                is_active,
+                assembly_categories!assembly_category(category_name)
             )
-        `,
+        )
+    `,
         )
         .eq("id", id)
         .single();
@@ -314,7 +315,6 @@ export async function GET(request: NextRequest, context: any) {
         );
     }
 
-    // You can add more calculations or data transformations here
     const shapes = estimate.measurement_sessions?.measurement_shapes || [];
     const images = estimate.measurement_sessions?.measurement_images || [];
     const shapeDimension = extractDimensions(shapes);
@@ -334,6 +334,7 @@ export async function GET(request: NextRequest, context: any) {
         { totalMaterialCost, totalLaborCost, totalCost },
         measurementSummary,
         lineItemCosts,
+        shapes,
     );
 
     // --- 5. GENERATE PDF ---
@@ -376,6 +377,7 @@ function buildEstimateHtml(
     totals: { totalMaterialCost: number; totalLaborCost: number; totalCost: number },
     measurementSummary: MeasurementSummary,
     lineItemCosts: { materialCost: number; laborCost: number; totalCost: number }[],
+    measurementShapes: MeasurementShape[],
 ) {
     const generatedAt = new Date().toLocaleString();
     const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -540,47 +542,62 @@ ${
   <h2>Estimate Details</h2>
   
   <table class="details-table">
-    <thead>
-      <tr>
-        <th>Description</th>
-        <th>Type</th>
-        <th>Pricing Unit</th>
-        <th>Material Cost</th>
-        <th>Labor Cost</th>
-        <th>Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${
-          items
-              ?.map((item, idx) => {
-                  const cost = lineItemCosts[idx] || {
-                      materialCost: 0,
-                      laborCost: 0,
-                      totalCost: 0,
-                  };
-                  const name = item.is_manual
-                      ? `Manual Item: ${item.manual_descriptions || "N/A"}`
-                      : item.assemblies?.assembly_name || "N/A";
-                  const type = item.is_manual
-                      ? item.manual_assembly_type
-                      : item.assemblies?.assembly_type || "N/A";
-                  const pricingType = item.is_manual
-                      ? item.manual_pricing_type
-                      : item.assemblies?.pricing_type || "N/A";
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Shape / Surface</th>
+            <th>Type</th>
+            <th>Pricing Unit</th>
+            <th>Material Cost</th>
+            <th>Labor Cost</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+     ${
+         items
+             ?.map((item, idx) => {
+                 const cost = lineItemCosts[idx] || {
+                     materialCost: 0,
+                     laborCost: 0,
+                     totalCost: 0,
+                 };
 
-                  return `
-                  <tr>
-                    <td>${name}</td>
-                    <td>${type}</td>
-                    <td>${pricingType ? pricingType.replace(/_/g, " ") : "N/A"}</td>
-                    <td>$${cost.materialCost.toFixed(2)}</td>
-                    <td>$${cost.laborCost.toFixed(2)}</td>
-                    <td>$${cost.totalCost.toFixed(2)}</td>
-                  </tr>`;
-              })
-              .join("") || "<tr><td colspan='6'>No items found.</td></tr>"
-      }
+                 // Находим связанную фигуру
+                 const shape = measurementShapes.find((s) => s.id === item.shape_id);
+
+                 // Определяем описание элемента
+                 const name = item.is_manual
+                     ? `Manual Item: ${item.manual_descriptions || "N/A"}`
+                     : item.assemblies?.assembly_name || "N/A";
+
+                 // Описание фигуры
+                 const shapeDescription = shape
+                     ? shape.label
+                         ? `${shape.label} (${shape.surface_type} - ${shape.magnitude})`
+                         : `${shape.surface_type} (${shape.shape_type} - ${shape.magnitude})`
+                     : "N/A";
+
+                 const type = item.is_manual
+                     ? item.manual_assembly_type
+                     : item.assemblies?.assembly_type || "N/A";
+                 const pricingType = item.is_manual
+                     ? item.manual_pricing_type
+                     : item.assemblies?.pricing_type || "N/A";
+
+                 return `
+                      <tr>
+                        <td>${name}</td>
+                        <td>${shapeDescription}</td>
+                        <td>${type}</td>
+                        <td>${pricingType ? pricingType.replace(/_/g, " ") : "N/A"}</td>
+                        <td>$${cost.materialCost.toFixed(2)}</td>
+                        <td>$${cost.laborCost.toFixed(2)}</td>
+                        <td>$${cost.totalCost.toFixed(2)}</td>
+                      </tr>`;
+             })
+             .join("") || "<tr><td colspan='7'>No items found.</td></tr>"
+     }
     </tbody>
   </table>
 

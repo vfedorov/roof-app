@@ -104,34 +104,6 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
         loadProperties();
     }, []);
 
-    // // Filtering inspections by Property
-    // useEffect(() => {
-    //     if (!selectedPropertyId) {
-    //         setInspections([]);
-    //         setInspectionId("");
-    //         return;
-    //     }
-    //
-    //     const filtered = inspections.filter((insp) => insp.properties?.id === selectedPropertyId);
-    //     setInspections(filtered);
-    //     setInspectionId("");
-    // }, [selectedPropertyId]);
-    //
-    // // Filtering measurement sessions by Property
-    // useEffect(() => {
-    //     if (!selectedPropertyId) {
-    //         setMeasurementSessions([]);
-    //         setMeasurementSessionId("");
-    //         return;
-    //     }
-    //
-    //     const filtered = measurementSessions.filter(
-    //         (sess) => sess.properties?.id === selectedPropertyId,
-    //     );
-    //     setMeasurementSessions(filtered);
-    //     setMeasurementSessionId("");
-    // }, [selectedPropertyId]);
-
     // Fetch data
     useEffect(() => {
         const fetchData = async () => {
@@ -208,7 +180,6 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
         fetchData();
     }, []);
 
-    // Load measurement sessions when inspection selected
     useEffect(() => {
         const fetchSessions = async () => {
             const { data, error } = await supabase

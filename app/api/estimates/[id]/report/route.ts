@@ -314,12 +314,6 @@ export async function GET(request: NextRequest, context: any) {
         );
     }
 
-    // --- 2. PREPARE DATA FOR PDF ---
-    // Calculate totals, format data, etc.
-    // const { totalMaterialCost, totalLaborCost, totalCost } = calculateTotals(
-    //     estimate.estimate_items || [],
-    // );
-
     // You can add more calculations or data transformations here
     const shapes = estimate.measurement_sessions?.measurement_shapes || [];
     const images = estimate.measurement_sessions?.measurement_images || [];
@@ -361,7 +355,7 @@ export async function GET(request: NextRequest, context: any) {
         },
     });
 
-    await browser.close(); // Always close the browser
+    await browser.close();
 
     const arrayBuffer = new Uint8Array(pdf).buffer;
 
@@ -369,34 +363,9 @@ export async function GET(request: NextRequest, context: any) {
         status: 200,
         headers: {
             "Content-Type": "application/pdf",
-            "Content-Disposition": `inline; filename=estimate-${id}.pdf`, // Or attachment
+            "Content-Disposition": `inline; filename=estimate-${estimate.measurement_sessions?.properties.name.replace(/ /g, "_")}-${new Date(estimate.created_at).toISOString().split("T")[0]}.pdf`,
         },
     });
-}
-
-// --- CALCULATION HELPERS ---
-function calculateTotals(items: EstimateItem[]): {
-    totalMaterialCost: number;
-    totalLaborCost: number;
-    totalCost: number;
-} {
-    let totalMaterialCost = 0;
-    let totalLaborCost = 0;
-
-    items.forEach((item) => {
-        const materialPrice = item.is_manual ? item.manual_material_price : 0; //item.material_price;
-        const laborPrice = item.is_manual ? item.manual_labor_price : 0; //item.labor_price;
-
-        if (typeof materialPrice === "number") {
-            totalMaterialCost += materialPrice;
-        }
-        if (typeof laborPrice === "number") {
-            totalLaborCost += laborPrice;
-        }
-    });
-
-    const totalCost = totalMaterialCost + totalLaborCost;
-    return { totalMaterialCost, totalLaborCost, totalCost };
 }
 
 // ------------------------------------------------------------
@@ -458,6 +427,7 @@ function buildEstimateHtml(
   .photo-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
   .photo-grid img { width: calc(50% - 10px); max-width: 250px; border: 1px solid #cbd5e0; border-radius: 4px; }
   .footer { position: fixed; bottom: 10px; width: 100%; text-align: center; font-size: 10px; color: #666; }
+  .no-page-break { break-inside: avoid; page-break-inside: avoid; }
 </style>
 </head>
 
@@ -554,9 +524,11 @@ ${
   ${
       measurementSummary.images.length > 0
           ? `
-  <h3>Measurement Images</h3>
-  <div class="photo-grid">
-    ${measurementSummary.images.map((img) => `<img src="${img}" alt="Measurement" />`).join("")}
+  <div class="no-page-break">
+    <h3>Measurement Images</h3>
+    <div class="photo-grid">
+        ${measurementSummary.images.map((img) => `<img src="${img}" alt="Measurement" />`).join("")}
+    </div>
   </div>
   `
           : ""

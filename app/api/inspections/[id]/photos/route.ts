@@ -142,44 +142,98 @@ export async function DELETE(request: NextRequest, context: any) {
 
     const { searchParams } = new URL(request.url);
 
-    const name = searchParams.get("name");
+    const photo_id = searchParams.get("photo_id");
     const kind = searchParams.get("kind") as "original" | "annotated" | null;
 
     const section_id = searchParams.get("section_id");
-    if (!id || !name || !kind || !section_id) {
+    if (!id || !photo_id || !kind || !section_id) {
         return NextResponse.json(
-            { error: "Missing id, name, kind, or section_id" },
+            { error: "Missing id, photo_id, kind, or section_id" },
             { status: 400 },
         );
+    }
+    const { data: photoData, error: fetchError } = await supabaseAdmin
+        .from("inspection_images")
+        .select("image_url, annotated_image_url")
+        .eq("id", photo_id)
+        .eq("inspection_id", id)
+        .eq("section_id", section_id)
+        .single();
+
+    if (fetchError || !photoData) {
+        return NextResponse.json({ error: "Photo not found" }, { status: 404 });
     }
 
     const paths: string[] = [];
 
+    const extractFilename = (url: string | null): string | null => {
+        if (!url) return null;
+        try {
+            const urlObj = new URL(url);
+            const pathParts = urlObj.pathname.split("/");
+            return pathParts[pathParts.length - 1];
+        } catch {
+            return null;
+        }
+    };
+
     if (kind === "original") {
-        // Delete original
-        paths.push(`inspections/${id}/original/${name}`);
-        // Delete annotated if exists
-        paths.push(`inspections/${id}/annotated/${name}`);
+        if (photoData.image_url) {
+            const filename = extractFilename(photoData.image_url);
+            if (filename) {
+                paths.push(`inspections/${id}/original/${filename}`);
+            }
+        }
+        if (photoData.annotated_image_url) {
+            const filename = extractFilename(photoData.annotated_image_url);
+            if (filename) {
+                paths.push(`inspections/${id}/annotated/${filename}`);
+            }
+        }
     }
 
     if (kind === "annotated") {
-        // Delete annotation only
-        paths.push(`inspections/${id}/annotated/${name}`);
+        if (photoData.annotated_image_url) {
+            const filename = extractFilename(photoData.annotated_image_url);
+            if (filename) {
+                paths.push(`inspections/${id}/annotated/${filename}`);
+            }
+        }
     }
 
-    const { error } = await supabaseAdmin.storage.from(BUCKET).remove(paths);
-
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    if (paths.length > 0) {
+        const { error: storageError } = await supabaseAdmin.storage.from(BUCKET).remove(paths);
+        if (storageError) {
+            return NextResponse.json({ error: storageError.message }, { status: 500 });
+        }
     }
 
-    await supabaseAdmin
-        .from("inspection_images")
-        .delete()
-        .eq("inspection_id", id)
-        .eq("section_id", section_id)
-        .eq("name", name)
-        .in("kind", kind === "original" ? ["original", "annotated"] : ["annotated"]);
+    if (kind === "original") {
+        const { error: dbError } = await supabaseAdmin
+            .from("inspection_images")
+            .delete()
+            .eq("id", photo_id)
+            .eq("inspection_id", id)
+            .eq("section_id", section_id);
+
+        if (dbError) {
+            return NextResponse.json({ error: dbError.message }, { status: 500 });
+        }
+    }
+
+    if (kind === "annotated") {
+        const { error: dbError } = await supabaseAdmin
+            .from("inspection_images")
+            .update({ annotated_image_url: null })
+            .eq("id", photo_id)
+            .eq("inspection_id", id)
+            .eq("section_id", section_id)
+            .select();
+
+        if (dbError) {
+            return NextResponse.json({ error: dbError.message }, { status: 500 });
+        }
+    }
 
     return NextResponse.json({ ok: true });
 }

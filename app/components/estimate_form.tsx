@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 interface Inspection {
     id: string;
     date: string;
+    roof_type: string;
     properties: {
         id: string;
         name: string | null;
@@ -157,7 +158,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                 const { data: inspectionsData, error: inspError } = await supabase
                     .from("inspections")
                     .select(
-                        "id, date, properties!property_id(id, name, address), users!inspector_id(name)",
+                        "id, date, roof_type, properties!property_id(id, name, address), users!inspector_id(name)",
                     )
                     .order("created_at", { ascending: false });
 
@@ -175,6 +176,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                 const normalizedInspectionsData = (inspectionsData || []).map((insp) => ({
                     id: insp.id,
                     date: insp.date,
+                    roof_type: insp.roof_type,
                     properties: Array.isArray(insp.properties)
                         ? insp.properties.length > 0
                             ? insp.properties[0]
@@ -589,7 +591,8 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                             .filter((insp) => insp.properties?.id === selectedPropertyId)
                             .map((insp) => (
                                 <option key={insp.id} value={insp.id} className="py-2">
-                                    {insp.users?.name} ({new Date(insp.date).toLocaleDateString()})
+                                    {insp.roof_type} roof • {insp.users?.name} •{" "}
+                                    {new Date(insp.date).toLocaleDateString()}
                                 </option>
                             ))}
                     </select>
@@ -631,7 +634,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
                             .filter((sess) => sess.properties?.id === selectedPropertyId)
                             .map((sess) => (
                                 <option key={sess.id} value={sess.id} className="py-2">
-                                    {sess.users?.name} ({new Date(sess.date).toLocaleDateString()})
+                                    {sess.users?.name} • {new Date(sess.date).toLocaleDateString()}
                                 </option>
                             ))}
                     </select>
@@ -642,208 +645,236 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
             {measurementShapes.length > 0 && (
                 <div>
                     <h3 className="text-xl font-semibold mb-3">
-                        Measurement Shapes ({measurementShapes.length})
+                        Measurement Shapes (
+                        {
+                            measurementShapes.filter(
+                                (shape) => !shape.surface_type?.toLowerCase().includes("damage"),
+                            ).length
+                        }
+                        )
                     </h3>
                     <div className="space-y-3">
-                        {measurementShapes.map((shape) => {
-                            const compatibleAssemblies = getCompatibleAssemblies(shape);
-                            const selection = shapeSelections[shape.id];
-                            const isManual = selection === "manual";
-                            const assembly =
-                                selection && selection !== "manual"
-                                    ? assemblies.find((a) => a.id === selection)
-                                    : null;
-                            const manualData = manualShapeData[shape.id];
-                            return (
-                                <div
-                                    key={shape.id}
-                                    className="border border-gray-600 rounded-lg p-4"
-                                >
-                                    <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                                        <div className="flex-1">
-                                            <div className="font-medium text-lg">
-                                                {shape.surface_type} ({shape.shape_type})
-                                            </div>
+                        {measurementShapes
+                            .filter(
+                                (shape) => !shape.surface_type?.toLowerCase().includes("damage"),
+                            )
+                            .map((shape) => {
+                                const compatibleAssemblies = getCompatibleAssemblies(shape);
+                                const selection = shapeSelections[shape.id];
+                                const isManual = selection === "manual";
+                                const assembly =
+                                    selection && selection !== "manual"
+                                        ? assemblies.find((a) => a.id === selection)
+                                        : null;
+                                const manualData = manualShapeData[shape.id];
+                                return (
+                                    <div
+                                        key={shape.id}
+                                        className="border border-gray-600 rounded-lg p-4"
+                                    >
+                                        <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                                            <div className="flex-1">
+                                                <div className="font-medium text-lg">
+                                                    {shape.surface_type} ({shape.shape_type})
+                                                </div>
 
-                                            {shape.magnitude && (
-                                                <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                                                    {shape.shape_type === "polygon"
-                                                        ? `Area: ${shape.magnitude}`
-                                                        : `Length: ${shape.magnitude} `}
-                                                </div>
-                                            )}
-                                            {shape.waste_percentage && (
-                                                <div className="text-sm text-gray-600 dark:text-gray-300">
-                                                    Waste: {shape.waste_percentage}%
-                                                </div>
-                                            )}
+                                                {shape.magnitude && (
+                                                    <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                                                        {shape.shape_type === "polygon"
+                                                            ? `Area: ${shape.magnitude}`
+                                                            : `Length: ${shape.magnitude} `}
+                                                    </div>
+                                                )}
+                                                {shape.waste_percentage && (
+                                                    <div className="text-sm text-gray-600 dark:text-gray-300">
+                                                        Waste: {shape.waste_percentage}%
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full md:w-auto">
+                                                <select
+                                                    value={selection || ""}
+                                                    onChange={(e) =>
+                                                        handleAssemblySelectForShape(
+                                                            shape.id,
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    className="select py-2 px-3 rounded-lg border border-gray-600 w-full sm:w-auto"
+                                                >
+                                                    <option value="">Select Assembly</option>
+                                                    <option value="manual">
+                                                        📝 Manual Line Item
+                                                    </option>
+                                                    <optgroup label="Compatible Assemblies">
+                                                        {compatibleAssemblies.map((asm) => (
+                                                            <option key={asm.id} value={asm.id}>
+                                                                {asm.assembly_name} (
+                                                                {
+                                                                    asm.assembly_categories
+                                                                        ?.category_name
+                                                                }
+                                                                ) - $
+                                                                {(
+                                                                    asm.material_price +
+                                                                    asm.labor_price
+                                                                ).toFixed(2)}
+                                                                /
+                                                                {asm.pricing_type.replace(
+                                                                    /_/g,
+                                                                    " ",
+                                                                )}
+                                                            </option>
+                                                        ))}
+                                                    </optgroup>
+                                                </select>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleAddShapeToEstimate(shape)}
+                                                    disabled={!selection}
+                                                    className={`btn py-2 px-4 rounded-lg transition-colors whitespace-nowrap w-full sm:w-auto ${
+                                                        !selection
+                                                            ? "bg-gray-600 cursor-not-allowed"
+                                                            : "bg-blue-600 hover:bg-blue-700"
+                                                    }`}
+                                                >
+                                                    ➕ Add to Estimate
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full md:w-auto">
-                                            <select
-                                                value={selection || ""}
-                                                onChange={(e) =>
-                                                    handleAssemblySelectForShape(
-                                                        shape.id,
-                                                        e.target.value,
-                                                    )
-                                                }
-                                                className="select py-2 px-3 rounded-lg border border-gray-600 w-full sm:w-auto"
-                                            >
-                                                <option value="">Select Assembly</option>
-                                                <option value="manual">📝 Manual Line Item</option>
-                                                <optgroup label="Compatible Assemblies">
-                                                    {compatibleAssemblies.map((asm) => (
-                                                        <option key={asm.id} value={asm.id}>
-                                                            {asm.assembly_name} - $
-                                                            {(
-                                                                asm.material_price + asm.labor_price
-                                                            ).toFixed(2)}
-                                                            /{asm.pricing_type.replace(/_/g, " ")}
-                                                        </option>
-                                                    ))}
-                                                </optgroup>
-                                            </select>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleAddShapeToEstimate(shape)}
-                                                disabled={!selection}
-                                                className={`btn py-2 px-4 rounded-lg transition-colors whitespace-nowrap w-full sm:w-auto ${
-                                                    !selection
-                                                        ? "bg-gray-600 cursor-not-allowed"
-                                                        : "bg-blue-600 hover:bg-blue-700"
-                                                }`}
-                                            >
-                                                ➕ Add to Estimate
-                                            </button>
-                                        </div>
+                                        {/** Manual Line Item Form **/}
+                                        {isManual && (
+                                            <div className="mt-4 pt-4 border-t border-gray-700">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block mb-2 text-sm font-medium">
+                                                            Assembly Type
+                                                        </label>
+                                                        <select
+                                                            value={
+                                                                manualData?.manual_assembly_type ||
+                                                                "roofing"
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleManualDataChange(
+                                                                    shape.id,
+                                                                    "manual_assembly_type",
+                                                                    e.target.value as
+                                                                        | "roofing"
+                                                                        | "siding",
+                                                                )
+                                                            }
+                                                            className="select w-full py-2 px-3 rounded-lg border border-gray-600"
+                                                        >
+                                                            <option value="roofing">Roofing</option>
+                                                            <option value="siding">Siding</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block mb-2 text-sm font-medium">
+                                                            Pricing Type
+                                                        </label>
+                                                        <select
+                                                            value={
+                                                                manualData?.manual_pricing_type ||
+                                                                "per_sq_ft"
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleManualDataChange(
+                                                                    shape.id,
+                                                                    "manual_pricing_type",
+                                                                    e.target.value as any,
+                                                                )
+                                                            }
+                                                            className="select w-full py-2 px-3 rounded-lg border border-gray-600"
+                                                        >
+                                                            <option value="per_square">
+                                                                Per Square
+                                                            </option>
+                                                            <option value="per_sq_ft">
+                                                                Per Sq Ft
+                                                            </option>
+                                                            <option value="per_linear_ft">
+                                                                Per Linear Ft
+                                                            </option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block mb-2 text-sm font-medium">
+                                                            Material Price
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            value={
+                                                                manualData?.manual_material_price ||
+                                                                ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleManualDataChange(
+                                                                    shape.id,
+                                                                    "manual_material_price",
+                                                                    parseFloat(e.target.value) || 0,
+                                                                )
+                                                            }
+                                                            min="0"
+                                                            step="0.01"
+                                                            className="input w-full py-2 px-3 rounded-lg border border-gray-600"
+                                                            placeholder="0.00"
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block mb-2 text-sm font-medium">
+                                                            Labor Price
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            value={
+                                                                manualData?.manual_labor_price || ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleManualDataChange(
+                                                                    shape.id,
+                                                                    "manual_labor_price",
+                                                                    parseFloat(e.target.value) || 0,
+                                                                )
+                                                            }
+                                                            min="0"
+                                                            step="0.01"
+                                                            className="input w-full py-2 px-3 rounded-lg border border-gray-600"
+                                                            placeholder="0.00"
+                                                        />
+                                                    </div>
+
+                                                    <div className="md:col-span-2">
+                                                        <label className="block mb-2 text-sm font-medium">
+                                                            Notes (optional)
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={
+                                                                manualData?.manual_descriptions ||
+                                                                ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleManualDataChange(
+                                                                    shape.id,
+                                                                    "manual_descriptions",
+                                                                    e.target.value,
+                                                                )
+                                                            }
+                                                            className="input w-full py-2 px-3 rounded-lg border border-gray-600"
+                                                            placeholder={`e.g., ${shape.surface_type} (${shape.shape_type})`}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    {/** Manual Line Item Form **/}
-                                    {isManual && (
-                                        <div className="mt-4 pt-4 border-t border-gray-700">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="block mb-2 text-sm font-medium">
-                                                        Assembly Type
-                                                    </label>
-                                                    <select
-                                                        value={
-                                                            manualData?.manual_assembly_type ||
-                                                            "roofing"
-                                                        }
-                                                        onChange={(e) =>
-                                                            handleManualDataChange(
-                                                                shape.id,
-                                                                "manual_assembly_type",
-                                                                e.target.value as
-                                                                    | "roofing"
-                                                                    | "siding",
-                                                            )
-                                                        }
-                                                        className="select w-full py-2 px-3 rounded-lg border border-gray-600"
-                                                    >
-                                                        <option value="roofing">Roofing</option>
-                                                        <option value="siding">Siding</option>
-                                                    </select>
-                                                </div>
-
-                                                <div>
-                                                    <label className="block mb-2 text-sm font-medium">
-                                                        Pricing Type
-                                                    </label>
-                                                    <select
-                                                        value={
-                                                            manualData?.manual_pricing_type ||
-                                                            "per_sq_ft"
-                                                        }
-                                                        onChange={(e) =>
-                                                            handleManualDataChange(
-                                                                shape.id,
-                                                                "manual_pricing_type",
-                                                                e.target.value as any,
-                                                            )
-                                                        }
-                                                        className="select w-full py-2 px-3 rounded-lg border border-gray-600"
-                                                    >
-                                                        <option value="per_square">
-                                                            Per Square
-                                                        </option>
-                                                        <option value="per_sq_ft">Per Sq Ft</option>
-                                                        <option value="per_linear_ft">
-                                                            Per Linear Ft
-                                                        </option>
-                                                    </select>
-                                                </div>
-
-                                                <div>
-                                                    <label className="block mb-2 text-sm font-medium">
-                                                        Material Price
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        value={
-                                                            manualData?.manual_material_price || ""
-                                                        }
-                                                        onChange={(e) =>
-                                                            handleManualDataChange(
-                                                                shape.id,
-                                                                "manual_material_price",
-                                                                parseFloat(e.target.value) || 0,
-                                                            )
-                                                        }
-                                                        min="0"
-                                                        step="0.01"
-                                                        className="input w-full py-2 px-3 rounded-lg border border-gray-600"
-                                                        placeholder="0.00"
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="block mb-2 text-sm font-medium">
-                                                        Labor Price
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        value={manualData?.manual_labor_price || ""}
-                                                        onChange={(e) =>
-                                                            handleManualDataChange(
-                                                                shape.id,
-                                                                "manual_labor_price",
-                                                                parseFloat(e.target.value) || 0,
-                                                            )
-                                                        }
-                                                        min="0"
-                                                        step="0.01"
-                                                        className="input w-full py-2 px-3 rounded-lg border border-gray-600"
-                                                        placeholder="0.00"
-                                                    />
-                                                </div>
-
-                                                <div className="md:col-span-2">
-                                                    <label className="block mb-2 text-sm font-medium">
-                                                        Notes (optional)
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={
-                                                            manualData?.manual_descriptions || ""
-                                                        }
-                                                        onChange={(e) =>
-                                                            handleManualDataChange(
-                                                                shape.id,
-                                                                "manual_descriptions",
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                        className="input w-full py-2 px-3 rounded-lg border border-gray-600"
-                                                        placeholder={`e.g., ${shape.surface_type} (${shape.shape_type})`}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
                     </div>
                 </div>
             )}

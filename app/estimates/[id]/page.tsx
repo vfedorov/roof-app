@@ -170,7 +170,7 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
                 {/* Estimate Items */}
                 <div className="card">
                     <h3 className="text-xl font-semibold mb-4">
-                        Assemblies Included in the Estimate ({estimateItems.length})
+                        Shape - Assembly List ({estimateItems.length})
                     </h3>
                     {estimateItems.length === 0 ? (
                         <p className="text-gray-500">No items in this estimate</p>
@@ -186,35 +186,39 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
                                         className="border border-gray-600 rounded-lg p-4"
                                     >
                                         <div className="flex justify-between items-start">
-                                            <div>
-                                                <div className="font-medium text-lg">
-                                                    {item.is_manual
-                                                        ? "Manual Item"
-                                                        : assembly?.assembly_name || "—"}
-                                                </div>
-                                                <div className="text-sm text-gray-400">
-                                                    (
-                                                    {item.is_manual
-                                                        ? `${item.manual_assembly_type} - ${item.manual_pricing_type?.includes("sq") ? "area" : "linear"}`
-                                                        : `${assembly?.assembly_type || ""} - ${assembly?.assembly_categories.category_name}${assembly?.pricing_type ? ` - ${assembly.pricing_type?.includes("sq") ? "area" : "linear"}` : ""}`}
-                                                    )
-                                                </div>
-
-                                                {item.is_manual && item.manual_descriptions && (
-                                                    <div className="text-sm text-gray-300 mt-1 italic">
-                                                        {item.manual_descriptions}
-                                                    </div>
-                                                )}
+                                            <div className="flex items-center gap-2">
                                                 {item.shape_id && shape && (
-                                                    <div className="text-xs text-gray-400 mt-1">
+                                                    <div className="font-medium text-lg">
                                                         {shape.label
-                                                            ? `From: "${shape.label}" (${shape.magnitude})`
-                                                            : `From: ${shape.surface_type} (${shape.magnitude})`}
+                                                            ? `${shape.label}`
+                                                            : `${shape.surface_type}`}{" "}
+                                                        <span className="text-sm text-gray-400">
+                                                            ({shape.magnitude})
+                                                        </span>
                                                     </div>
                                                 )}
                                                 {item.shape_id && !shape && (
-                                                    <div className="text-xs text-gray-400 mt-1">
+                                                    <div className="font-medium text-lg">
                                                         Shape data not available
+                                                    </div>
+                                                )}
+                                                {"\u00A0—\u00A0"}
+                                                <div className="font-medium text-lg">
+                                                    {item.is_manual
+                                                        ? "Manual Item"
+                                                        : assembly?.assembly_name || "—"}{" "}
+                                                    <span className="text-sm text-gray-400">
+                                                        (
+                                                        {item.is_manual
+                                                            ? `${item.manual_assembly_type} - ${item.manual_pricing_type?.includes("sq") ? "area" : "linear"}`
+                                                            : `${assembly?.assembly_type || ""} - ${assembly?.assembly_categories.category_name}${assembly?.pricing_type ? ` - ${assembly.pricing_type?.includes("sq") ? "area" : "linear"}` : ""}`}
+                                                        )
+                                                    </span>
+                                                </div>
+
+                                                {item.is_manual && item.manual_descriptions && (
+                                                    <div className="text-sm text-gray-300 italic">
+                                                        {item.manual_descriptions}
                                                     </div>
                                                 )}
                                             </div>
@@ -239,8 +243,9 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
                                                           "0.00"}
                                                 </div>
 
-                                                <div className="text-sm text-gray-400 mt-1">
-                                                    Pricing: $
+                                                <div className="text-sm mt-1">
+                                                    <span className="text-gray-400">Pricing:</span>{" "}
+                                                    $
                                                     {item.is_manual
                                                         ? item.manual_material_price +
                                                           item.manual_labor_price

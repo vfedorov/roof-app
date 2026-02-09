@@ -329,12 +329,15 @@ export async function GET(request: NextRequest, context: any) {
     const totalCost = lineItemCosts.reduce((sum, item) => sum + item.totalCost, 0);
 
     // --- 4. BUILD HTML ---
+    const categoryTotals = aggregateCostsByCategory(lineItemCosts, estimate.estimate_items, shapes);
+
     const html = buildEstimateHtml(
         estimate,
         { totalMaterialCost, totalLaborCost, totalCost },
         measurementSummary,
         lineItemCosts,
         shapes,
+        categoryTotals,
     );
 
     // --- 5. GENERATE PDF ---
@@ -370,6 +373,68 @@ export async function GET(request: NextRequest, context: any) {
 }
 
 // ------------------------------------------------------------
+// AGGREGATE COSTS BY CATEGORY (Roof, Siding, Linear)
+// ------------------------------------------------------------
+interface CategoryTotals {
+    roof: { material: number; labor: number; total: number };
+    siding: { material: number; labor: number; total: number };
+    linear: { material: number; labor: number; total: number };
+}
+
+function aggregateCostsByCategory(
+    lineItemCosts: { materialCost: number; laborCost: number; totalCost: number }[],
+    estimateItems: EstimateItem[] | undefined,
+    measurementShapes: MeasurementShape[],
+): CategoryTotals {
+    const totals: CategoryTotals = {
+        roof: { material: 0, labor: 0, total: 0 },
+        siding: { material: 0, labor: 0, total: 0 },
+        linear: { material: 0, labor: 0, total: 0 },
+    };
+
+    if (!estimateItems) return totals;
+
+    for (let i = 0; i < estimateItems.length; i++) {
+        const item = estimateItems[i];
+        const cost = lineItemCosts[i] || { materialCost: 0, laborCost: 0, totalCost: 0 };
+
+        // Находим связанную фигуру
+        const shape = item.shape_id ? measurementShapes.find((s) => s.id === item.shape_id) : null;
+
+        // Определяем категорию
+        let category: keyof CategoryTotals = "roof"; // default
+
+        if (item.is_manual) {
+            // Для ручных элементов смотрим на тип сборки и тип цены
+            if (item.manual_assembly_type === "roofing") {
+                category = item.manual_pricing_type?.includes("linear") ? "linear" : "roof";
+            } else if (item.manual_assembly_type === "siding") {
+                category = item.manual_pricing_type?.includes("linear") ? "linear" : "siding";
+            }
+        } else if (shape) {
+            // Для автоматических элементов смотрим на фигуру
+            const surfaceType = shape.surface_type?.toLowerCase() || "";
+            const shapeType = shape.shape_type;
+
+            if (shapeType === "line") {
+                category = "linear";
+            } else if (surfaceType.includes("roof")) {
+                category = "roof";
+            } else if (surfaceType.includes("siding")) {
+                category = "siding";
+            }
+        }
+
+        // Добавляем стоимость в соответствующую категорию
+        totals[category].material += cost.materialCost;
+        totals[category].labor += cost.laborCost;
+        totals[category].total += cost.totalCost;
+    }
+
+    return totals;
+}
+
+// ------------------------------------------------------------
 // HTML Template for Estimate
 // ------------------------------------------------------------
 function buildEstimateHtml(
@@ -378,6 +443,7 @@ function buildEstimateHtml(
     measurementSummary: MeasurementSummary,
     lineItemCosts: { materialCost: number; laborCost: number; totalCost: number }[],
     measurementShapes: MeasurementShape[],
+    categoryTotals: CategoryTotals,
 ) {
     const generatedAt = new Date().toLocaleString();
     const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -544,10 +610,10 @@ ${
   <table class="details-table">
         <thead>
           <tr>
-            <th>Item</th>
             <th>Shape / Surface</th>
+            <th>Assembly</th>
             <th>Type</th>
-            <th>Pricing Unit</th>
+<!--            <th>Pricing Unit</th>-->
             <th>Material Cost</th>
             <th>Labor Cost</th>
             <th>Total</th>
@@ -587,10 +653,10 @@ ${
 
                  return `
                       <tr>
-                        <td>${name}</td>
                         <td>${shapeDescription}</td>
+                        <td>${name}</td>
                         <td>${type}</td>
-                        <td>${pricingType ? pricingType.replace(/_/g, " ") : "N/A"}</td>
+                        <!-- <td>${pricingType ? pricingType.replace(/_/g, " ") : "N/A"}</td>-->
                         <td>$${cost.materialCost.toFixed(2)}</td>
                         <td>$${cost.laborCost.toFixed(2)}</td>
                         <td>$${cost.totalCost.toFixed(2)}</td>
@@ -601,23 +667,36 @@ ${
     </tbody>
   </table>
 
-
-
-
-
-  <!-- TOTALS SECTION -->
-  <div class="totals-section">
-    <h3>Totals</h3>
+    <!-- GRAND TOTALS -->
+    <div class="totals-section no-page-break">    
+    <h2>Grand Totals</h2>
+    <hr>
+    <h3>Roof</h3>
+    <p><strong>$${categoryTotals.roof.total.toFixed(2)}</strong></p>
+    <p><strong>Material:</strong> $${categoryTotals.roof.material.toFixed(2)}</p>
+    <p><strong>Labor:</strong> $${categoryTotals.roof.labor.toFixed(2)}</p>
+    <hr>       
+    <h3>Siding</h3>
+    <p><strong>$${categoryTotals.siding.total.toFixed(2)}</strong></p>
+    <p><strong>Material:</strong> $${categoryTotals.siding.material.toFixed(2)}</p>
+    <p><strong>Labor:</strong> $${categoryTotals.siding.labor.toFixed(2)}</p>
+    <hr>
+    <h3>Linear</h3>
+    <p><strong>$${categoryTotals.linear.total.toFixed(2)}</strong></p>
+    <p><strong>Material:</strong> $${categoryTotals.linear.material.toFixed(2)}</p>
+    <p><strong>Labor:</strong> $${categoryTotals.linear.labor.toFixed(2)}</p>
+    <hr>
     <p><strong>Total Material Cost:</strong> $${totals.totalMaterialCost.toFixed(2)}</p>
     <p><strong>Total Labor Cost:</strong> $${totals.totalLaborCost.toFixed(2)}</p>
-    <p style="font-size: 1.2em; font-weight: bold;"><strong>Grand Total:</strong> $${totals.totalCost.toFixed(2)}</p>
-  </div>
-</div>
-
-<!-- FOOTER -->
-<div class="footer">
-  Generated on ${generatedAt}
-</div>
+    <p style="font-size: 1.4em; font-weight: bold; color: #2d3748; margin-top: 10px;">
+      <strong>Grand Total:</strong> $${totals.totalCost.toFixed(2)}
+    </p>
+    </div>
+    
+    <!-- FOOTER -->
+    <div class="footer">
+      Generated on ${generatedAt}
+    </div>
 
 </body>
 </html>

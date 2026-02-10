@@ -29,8 +29,8 @@ export default function MobileHeader({ role }: { role: string }) {
 
     if (editMatch) {
         isEditing = true;
-        const section = editMatch[1]; // например, "/inspections"
-        const id = editMatch[2]; // например, "123"
+        const section = editMatch[1];
+        const id = editMatch[2];
         viewPath = `${section}/${id}`;
     }
 

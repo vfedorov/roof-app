@@ -102,9 +102,6 @@ export default function AssemblyForm({ user, action, assembly }: AssemblyFormPro
     useEffect(() => {
         const filtered = categories.filter((cat) => cat.type_name === assemblyType);
         setFilteredCategories(filtered);
-        // if (assemblyCategory && !filtered.some((cat) => cat.id === assemblyCategory)) {
-        //     setAssemblyCategory("");
-        // }
     }, [assemblyType, categories, assemblyCategory]);
 
     const handleSubmit = async (e: React.FormEvent) => {

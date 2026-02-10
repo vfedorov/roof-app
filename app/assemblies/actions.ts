@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase/supabase";
 import { getUser } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 
-// Тип для данных сборки
 interface AssemblyData {
     assembly_name: string;
     assembly_type: string;

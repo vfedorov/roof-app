@@ -124,35 +124,46 @@ export default function MeasurementForm({
         const measurementId = measurement?.id;
         if (!measurementId) return;
 
+        // const exportButton = document.querySelector(".export-base-image-btn") as HTMLButtonElement;
+        // if (exportButton) {
+        //     exportButton.click();
+        // }
+
         const localShapes = localStorage.getItem(`measurement_shapes_${measurementId}`);
         if (localShapes) {
             try {
-                // clear the shapes
-                const shapesClearRes = await fetch(`/api/measurements/${measurementId}/shapes`, {
-                    method: "DELETE",
-                });
+                const shapesToSync = JSON.parse(localShapes);
 
-                if (!shapesClearRes.ok) {
-                    throw new Error("Failed to clear shapes");
-                }
-            } catch (error) {
-                console.error(error);
-            }
-            try {
                 const res = await fetch(`/api/measurements/${measurementId}/shapes`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        shapes: JSON.parse(localShapes),
+                        shapes: shapesToSync,
                     }),
                 });
-                if (res.ok) {
-                    localStorage.removeItem(`measurement_shapes_${measurementId}`);
-                } else {
-                    toast({ title: "Warning", description: "Failed to sync shapes." });
+
+                const responseJson = await res.json();
+
+                // if (res.ok) {
+                //     localStorage.removeItem(`measurement_shapes_${measurementId}`);
+                //     toast({
+                //         title: "Success",
+                //         description: `Shapes synced: ${responseJson.created} created, ${responseJson.updated} updated, ${responseJson.deleted} deleted.`,
+                //     });
+                // } else
+                if (!res.ok) {
+                    console.error("Shape sync error:", responseJson);
+                    toast({
+                        title: "Warning",
+                        description: responseJson.details || "Failed to sync shapes.",
+                    });
                 }
             } catch (e) {
                 console.error("Shape sync error:", e);
+                toast({
+                    title: "Error",
+                    description: "Failed to parse or sync shapes.",
+                });
             }
         }
         toast({ title: "Success", description: "Measurement saved successfully!" });

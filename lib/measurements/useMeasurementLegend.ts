@@ -91,7 +91,6 @@ export const useMeasurementLegend = (
 
         updateLegend();
 
-        // Подписка на изменения холста
         canvas.on("object:added", updateLegend);
         canvas.on("object:removed", updateLegend);
         canvas.on("object:modified", updateLegend);

@@ -18,7 +18,6 @@ const MeasurementLegend: React.FC<MeasurementLegendProps> = ({
 
     return (
         <div className="legend-panel w-full bg-gray-800 text-white">
-            {/* Заголовок — всегда виден */}
             <div
                 onClick={onToggle}
                 className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-700 transition-colors"
@@ -27,7 +26,6 @@ const MeasurementLegend: React.FC<MeasurementLegendProps> = ({
                 <span className="text-xl">{isExpanded ? "▲" : "▼"}</span>
             </div>
 
-            {/* Содержимое — только если развёрнуто */}
             {isExpanded && (
                 <div className="p-3 space-y-2 border-t border-gray-700">
                     {items.map((item) => (

@@ -58,12 +58,6 @@ type EstimateItem = {
     manual_labor_price?: number | null;
     manual_descriptions?: string;
     is_manual?: boolean;
-    // Add other fields as they might be fetched, e.g., from joined assemblies table
-    // assembly_name?: string; // Fetched from assemblies table join
-    // assembly_type?: "roofing" | "siding"; // Fetched from assemblies table join
-    // pricing_type?: "per_square" | "per_sq_ft" | "per_linear_ft"; // Fetched from assemblies table join
-    // material_price?: number; // Fetched from assemblies table join
-    // labor_price?: number; // Fetched from assemblies table join
     assemblies?: Assembly;
     shape_id?: string;
 };
@@ -75,7 +69,6 @@ type EstimateWithDetails = {
     is_finalize?: boolean;
     created_at?: string;
     updated_at?: string;
-    // Joined data
     inspections?: {
         date: string;
         summary_notes: string;
@@ -91,7 +84,6 @@ type EstimateWithDetails = {
         measurement_images?: MeasurementImage[];
     };
     estimate_items?: EstimateItem[];
-    // Add other joined relations if needed
 };
 
 interface MeasurementSummary {
@@ -109,9 +101,8 @@ interface MeasurementSummary {
         other: number;
     };
     otherAreaSqFt: number;
-    images: string[]; // Added for PDF
+    images: string[];
 }
-// --- HELPER FUNCTIONS ---
 
 // ---------------------------------------------------------------------------
 // DOWNLOAD + CACHE chromium-min ON VERCEL
@@ -320,10 +311,8 @@ export async function GET(request: NextRequest, context: any) {
     const shapeDimension = extractDimensions(shapes);
     const measurementSummary = computeMeasurementSummary(shapeDimension, images);
 
-    // Рассчитываем стоимость каждой строки
     const lineItemCosts = calculateEstimateCosts(estimate.estimate_items || [], shapes);
 
-    // Суммируем итоги
     const totalMaterialCost = lineItemCosts.reduce((sum, item) => sum + item.materialCost, 0);
     const totalLaborCost = lineItemCosts.reduce((sum, item) => sum + item.laborCost, 0);
     const totalCost = lineItemCosts.reduce((sum, item) => sum + item.totalCost, 0);
@@ -344,9 +333,9 @@ export async function GET(request: NextRequest, context: any) {
     const browser = await getBrowser();
     const page = await browser.newPage();
 
-    await page.setViewport({ width: 1200, height: 1800 }); // Adjust viewport as needed
+    await page.setViewport({ width: 1200, height: 1800 });
 
-    await page.setContent(html, { waitUntil: "networkidle0" }); // Wait for resources if needed
+    await page.setContent(html, { waitUntil: "networkidle0" });
 
     const pdf = await page.pdf({
         format: "A4", // Or Letter
@@ -398,21 +387,17 @@ function aggregateCostsByCategory(
         const item = estimateItems[i];
         const cost = lineItemCosts[i] || { materialCost: 0, laborCost: 0, totalCost: 0 };
 
-        // Находим связанную фигуру
         const shape = item.shape_id ? measurementShapes.find((s) => s.id === item.shape_id) : null;
 
-        // Определяем категорию
         let category: keyof CategoryTotals = "roof"; // default
 
         if (item.is_manual) {
-            // Для ручных элементов смотрим на тип сборки и тип цены
             if (item.manual_assembly_type === "roofing") {
                 category = item.manual_pricing_type?.includes("linear") ? "linear" : "roof";
             } else if (item.manual_assembly_type === "siding") {
                 category = item.manual_pricing_type?.includes("linear") ? "linear" : "siding";
             }
         } else if (shape) {
-            // Для автоматических элементов смотрим на фигуру
             const surfaceType = shape.surface_type?.toLowerCase() || "";
             const shapeType = shape.shape_type;
 
@@ -425,7 +410,6 @@ function aggregateCostsByCategory(
             }
         }
 
-        // Добавляем стоимость в соответствующую категорию
         totals[category].material += cost.materialCost;
         totals[category].labor += cost.laborCost;
         totals[category].total += cost.totalCost;
@@ -588,7 +572,7 @@ ${
     </div>
   </div>
   
-  <!-- MEASUREMENT IMAGES (Base images only, max 6) -->
+  <!-- MEASUREMENT IMAGES -->
   ${
       measurementSummary.images.length > 0
           ? `
@@ -613,7 +597,6 @@ ${
             <th>Shape / Surface</th>
             <th>Assembly</th>
             <th>Type</th>
-<!--            <th>Pricing Unit</th>-->
             <th>Material Cost</th>
             <th>Labor Cost</th>
             <th>Total</th>
@@ -629,15 +612,12 @@ ${
                      totalCost: 0,
                  };
 
-                 // Находим связанную фигуру
                  const shape = measurementShapes.find((s) => s.id === item.shape_id);
 
-                 // Определяем описание элемента
                  const name = item.is_manual
                      ? `Manual Item: ${item.manual_descriptions || "N/A"}`
                      : item.assemblies?.assembly_name || "N/A";
 
-                 // Описание фигуры
                  const shapeDescription = shape
                      ? shape.label
                          ? `${shape.label} (${shape.surface_type} - ${shape.magnitude})`
@@ -656,7 +636,6 @@ ${
                         <td>${shapeDescription}</td>
                         <td>${name}</td>
                         <td>${type}</td>
-                        <!-- <td>${pricingType ? pricingType.replace(/_/g, " ") : "N/A"}</td>-->
                         <td>$${cost.materialCost.toFixed(2)}</td>
                         <td>$${cost.laborCost.toFixed(2)}</td>
                         <td>$${cost.totalCost.toFixed(2)}</td>
@@ -669,28 +648,43 @@ ${
 
     <!-- GRAND TOTALS -->
     <div class="totals-section no-page-break">    
-    <h2>Grand Totals</h2>
-    <hr>
-    <h3>Roof</h3>
-    <p><strong>$${categoryTotals.roof.total.toFixed(2)}</strong></p>
-    <p><strong>Material:</strong> $${categoryTotals.roof.material.toFixed(2)}</p>
-    <p><strong>Labor:</strong> $${categoryTotals.roof.labor.toFixed(2)}</p>
-    <hr>       
-    <h3>Siding</h3>
-    <p><strong>$${categoryTotals.siding.total.toFixed(2)}</strong></p>
-    <p><strong>Material:</strong> $${categoryTotals.siding.material.toFixed(2)}</p>
-    <p><strong>Labor:</strong> $${categoryTotals.siding.labor.toFixed(2)}</p>
-    <hr>
-    <h3>Linear</h3>
-    <p><strong>$${categoryTotals.linear.total.toFixed(2)}</strong></p>
-    <p><strong>Material:</strong> $${categoryTotals.linear.material.toFixed(2)}</p>
-    <p><strong>Labor:</strong> $${categoryTotals.linear.labor.toFixed(2)}</p>
-    <hr>
-    <p><strong>Total Material Cost:</strong> $${totals.totalMaterialCost.toFixed(2)}</p>
-    <p><strong>Total Labor Cost:</strong> $${totals.totalLaborCost.toFixed(2)}</p>
-    <p style="font-size: 1.4em; font-weight: bold; color: #2d3748; margin-top: 10px;">
-      <strong>Grand Total:</strong> $${totals.totalCost.toFixed(2)}
-    </p>
+        <h2>Grand Totals</h2>
+        ${
+            categoryTotals.roof.total > 0
+                ? `
+        <hr>
+        <h3>Roof</h3>
+        <p><strong>$${categoryTotals.roof.total.toFixed(2)}</strong></p>
+        <p><strong>Material:</strong> $${categoryTotals.roof.material.toFixed(2)}</p>
+        <p><strong>Labor:</strong> $${categoryTotals.roof.labor.toFixed(2)}</p>`
+                : ""
+        }
+        ${
+            categoryTotals.siding.total > 0
+                ? `
+        <hr>       
+        <h3>Siding</h3>
+        <p><strong>$${categoryTotals.siding.total.toFixed(2)}</strong></p>
+        <p><strong>Material:</strong> $${categoryTotals.siding.material.toFixed(2)}</p>
+        <p><strong>Labor:</strong> $${categoryTotals.siding.labor.toFixed(2)}</p>`
+                : ""
+        }
+        ${
+            categoryTotals.linear.total > 0
+                ? `
+        <hr>
+        <h3>Linear</h3>
+        <p><strong>$${categoryTotals.linear.total.toFixed(2)}</strong></p>
+        <p><strong>Material:</strong> $${categoryTotals.linear.material.toFixed(2)}</p>
+        <p><strong>Labor:</strong> $${categoryTotals.linear.labor.toFixed(2)}</p>`
+                : ""
+        }
+        <hr>
+        <p><strong>Total Material Cost:</strong> $${totals.totalMaterialCost.toFixed(2)}</p>
+        <p><strong>Total Labor Cost:</strong> $${totals.totalLaborCost.toFixed(2)}</p>
+        <p style="font-size: 1.4em; font-weight: bold; color: #2d3748; margin-top: 10px;">
+          <strong>Grand Total:</strong> $${totals.totalCost.toFixed(2)}
+        </p>
     </div>
     
     <!-- FOOTER -->

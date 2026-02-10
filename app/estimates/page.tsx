@@ -1,18 +1,10 @@
-import { getUser } from "@/lib/auth/auth";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/supabase";
 
 export default async function EstimatesPage() {
-    const user = await getUser();
-
     const query = supabase
         .from("estimates")
         .select("*, measurement_sessions(date, properties(name, address))");
-
-    // properties:property_id (
-    //   name,
-    //   address
-    // )
 
     const { data: estimates } = await query;
     return (

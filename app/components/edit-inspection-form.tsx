@@ -147,7 +147,6 @@ export function EditInspectionForm({
                     />
                 </div>
 
-                {/* NEW: Sections are inside the same form */}
                 <InspectionSections
                     sections={sections}
                     inspectionId={inspection.id}

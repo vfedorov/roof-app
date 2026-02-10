@@ -57,7 +57,6 @@ export function syncVertexCircles(polygon: fabric.Polygon, canvas: fabric.Canvas
     circles.forEach((circle: fabric.Circle, idx: number) => {
         const pt = polygon.points[idx];
 
-        // ВАЖНО: компенсируем pathOffset
         const localPoint = new fabric.Point(pt.x - offsetX, pt.y - offsetY);
 
         const transformed = localPoint.transform(matrix);
@@ -75,8 +74,7 @@ export function syncVertexCircles(polygon: fabric.Polygon, canvas: fabric.Canvas
 
 export const updatePolygonBoundingBox = (polygon: fabric.Polygon) => {
     if (!polygon.points || polygon.points.length === 0) return;
-    //
-    // // Находим минимальные и максимальные значения координат
+
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
@@ -89,11 +87,9 @@ export const updatePolygonBoundingBox = (polygon: fabric.Polygon) => {
         maxY = Math.max(maxY, point.y);
     });
 
-    // Рассчитываем новые размеры
     const width = Math.max(1, maxX - minX);
     const height = Math.max(1, maxY - minY);
 
-    // Принудительно обновляем bounding box
     polygon.set({ left: minX, top: minY, width: width, height: height, dirty: true });
     polygon.setCoords();
     polygon.setBoundingBox();
@@ -108,14 +104,12 @@ export const createLineVertexPoints = (
 ): fabric.Circle[] => {
     const vertexCircles: fabric.Circle[] = [];
 
-    // Получаем координаты концов линии
     const coords = line.getCoords();
     const x1 = coords[0].x;
     const y1 = coords[0].y;
     const x2 = coords[1].x;
     const y2 = coords[1].y;
 
-    // Создаем точки для начала и конца линии
     [0, 1].forEach((idx) => {
         const isStart = idx === 0;
         const pointX = isStart ? x1 : x2;
@@ -151,9 +145,6 @@ export const createLineVertexPoints = (
     return vertexCircles;
 };
 
-/**
- * Настраивает обработчики для точек линии
- */
 const setupLinePointHandlers = (
     circle: fabric.Circle,
     line: fabric.Line,
@@ -213,9 +204,6 @@ const setupLinePointHandlers = (
     });
 };
 
-/**
- * Синхронизирует позиции точек линии
- */
 export const syncLinePoints = (line: fabric.Line, canvas: fabric.Canvas) => {
     if (!line || !canvas) return;
 
@@ -228,7 +216,6 @@ export const syncLinePoints = (line: fabric.Line, canvas: fabric.Canvas) => {
     const x2 = coords[1].x;
     const y2 = coords[1].y;
 
-    // Обновляем позицию первой точки
     if (points[0]) {
         points[0].set({
             left: x1,
@@ -238,7 +225,6 @@ export const syncLinePoints = (line: fabric.Line, canvas: fabric.Canvas) => {
         points[0].setCoords();
     }
 
-    // Обновляем позицию второй точки
     if (points[1]) {
         points[1].set({
             left: x2,
@@ -251,9 +237,6 @@ export const syncLinePoints = (line: fabric.Line, canvas: fabric.Canvas) => {
     canvas.requestRenderAll();
 };
 
-/**
- * Удаляет точки линии
- */
 export const removeLinePoints = (line: fabric.Object, canvas: fabric.Canvas) => {
     if (!line || !canvas) return;
 

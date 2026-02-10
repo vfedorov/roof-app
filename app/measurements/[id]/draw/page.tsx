@@ -116,19 +116,6 @@ export default function DrawPage({ params }: { params: Promise<{ id: string }> }
         }
     }, [isMagnifierActive]);
 
-    const applyTransformToPoints = (
-        points: { x: number; y: number }[],
-        matrix: number[],
-    ): fabric.Point[] => {
-        return points.map((point) => {
-            const x = point.x;
-            const y = point.y;
-            const transformedX = matrix[0] * x + matrix[2] * y + matrix[4];
-            const transformedY = matrix[1] * x + matrix[3] * y + matrix[5];
-            return new fabric.Point(transformedX, transformedY);
-        });
-    };
-
     const openMetadataModal = (shape: fabric.Object) => {
         const id = (shape as any).id;
         if (!id || !fabricRef.current) return;

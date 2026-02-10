@@ -143,16 +143,5 @@ export async function DELETE(request: NextRequest, context: any) {
         return NextResponse.json({ error: dbError.message }, { status: 500 });
     }
 
-    // if (imageRecord.is_base_image) {
-    //     const { error: scaleResetError } = await supabaseAdmin
-    //         .from("measurement_sessions")
-    //         .update({ scale: null, scale_points: null })
-    //         .eq("id", id);
-    //
-    //     if (scaleResetError) {
-    //         console.warn("Failed to reset scale after base image deletion:", scaleResetError);
-    //     }
-    // }
-
     return NextResponse.json({ ok: true });
 }

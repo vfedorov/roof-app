@@ -53,7 +53,6 @@ export async function createEstimate(formData: FormData) {
             shape_id: measurementShapeId || null,
             is_manual: isManual,
 
-            // Только для ручных
             manual_assembly_type: isManual
                 ? formData.get(`items[${idx}][manual_assembly_type]`)
                 : null,
@@ -160,7 +159,6 @@ export async function updateEstimate(formData: FormData) {
             shape_id: measurementShapeId || null,
             is_manual: isManual,
 
-            // Только для ручных
             manual_assembly_type: isManual
                 ? formData.get(`items[${idx}][manual_assembly_type]`)
                 : null,
@@ -225,11 +223,6 @@ export async function getEstimateById(id: string) {
 }
 
 export async function deleteEstimate(id: string) {
-    // const user = await getUser();
-    // if (!user || user.role !== USER_ROLES.ADMIN) {
-    //     throw new Error("Not allowed");
-    // }
-
     const { error } = await supabase.from("estimates").delete().eq("id", id);
 
     if (error) {

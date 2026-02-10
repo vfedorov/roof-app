@@ -2,82 +2,17 @@
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/supabase";
+
 import { useToast } from "@/app/components/providers/toast-provider";
 import { useRouter } from "next/navigation";
-
-interface Inspection {
-    id: string;
-    date: string;
-    roof_type: string;
-    properties: {
-        id: string;
-        name: string | null;
-        address: string | null;
-    } | null;
-    users: {
-        name: string | null;
-    } | null;
-}
-
-interface MeasurementShape {
-    id: string;
-    surface_type: string;
-    shape_type: "polygon" | "line";
-    waste_percentage?: number | null;
-    magnitude?: string | "";
-    label?: string | null;
-}
-
-interface MeasurementSession {
-    id: string;
-    date: string;
-    properties: {
-        id: string;
-        name: string | null;
-        address: string | null;
-    } | null;
-    users: {
-        name: string | null;
-    } | null;
-}
-
-interface Assembly {
-    id: string;
-    assembly_name: string;
-    assembly_type: "roofing" | "siding";
-    pricing_type: "per_square" | "per_sq_ft" | "per_linear_ft";
-    material_price: number;
-    labor_price: number;
-    is_active: boolean;
-    assembly_categories: { category_name: string | null } | null;
-    assembly_companies: { company_name: string | null } | null;
-}
-
-interface Estimate {
-    id?: string;
-    inspection_id?: string;
-    measurement_session_id?: string;
-    is_finalize?: boolean;
-}
-
-interface EstimateItem {
-    id?: string;
-    assembly_id?: string;
-    manual_assembly_type?: "roofing" | "siding";
-    manual_pricing_type?: "per_square" | "per_sq_ft" | "per_linear_ft";
-    manual_material_price?: number | null;
-    manual_labor_price?: number | null;
-    manual_descriptions?: string;
-    is_manual?: boolean;
-    // Добавляем связь с фигурой
-    measurement_shape_id?: string;
-}
-
-interface EstimateFormProps {
-    user: { id: string; role: string };
-    action: (formData: FormData) => Promise<{ ok: boolean; message?: string } | void>;
-    estimate?: Estimate;
-}
+import {
+    Assembly,
+    EstimateFormProps,
+    EstimateItem,
+    Inspection,
+    MeasurementSession,
+    MeasurementShape,
+} from "@/lib/estimates/types";
 
 export default function EstimateForm({ user, action, estimate }: EstimateFormProps) {
     const { toast } = useToast();
@@ -95,9 +30,7 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isFinalized, setIsFinalized] = useState<boolean>(estimate?.is_finalize || false);
     const [estimateItems, setEstimateItems] = useState<EstimateItem[]>([]);
-    // Отслеживаем выбранную сборку для каждой фигуры (или "manual")
     const [shapeSelections, setShapeSelections] = useState<Record<string, string>>({});
-    // Ручные данные для каждой фигуры
     const [manualShapeData, setManualShapeData] = useState<
         Record<string, Omit<EstimateItem, "is_manual">>
     >({});
@@ -116,7 +49,6 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
         loadProperties();
     }, []);
 
-    // Загружаем фигуры при изменении выбранной сессии измерений
     useEffect(() => {
         const loadMeasurementShapes = async () => {
             if (!measurementSessionId) {
@@ -143,7 +75,6 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
             }
 
             setMeasurementShapes(data || []);
-            // Сбрасываем выборы при загрузке новых фигур
             setShapeSelections({});
             setManualShapeData({});
         };
@@ -271,7 +202,6 @@ export default function EstimateForm({ user, action, estimate }: EstimateFormPro
         fetchSessions();
     }, []);
 
-    // Вспомогательная функция для определения совместимых сборок
     const getCompatibleAssemblies = (shape: MeasurementShape): Assembly[] => {
         const surfaceType = shape.surface_type?.toLowerCase();
 

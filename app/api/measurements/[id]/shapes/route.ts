@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const params = await context.params; // ← await здесь обязателен
+    const params = await context.params;
     const { id } = params;
 
     try {
@@ -12,34 +12,111 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             return NextResponse.json({ error: "Invalid shapes format" }, { status: 400 });
         }
 
-        const { data: session, error: sessionError } = await supabaseAdmin
-            .from("measurement_sessions")
+        // Getting the existing shapes for the session
+        const { data: existingShapes, error: fetchError } = await supabaseAdmin
+            .from("measurement_shapes")
             .select("id")
-            .eq("id", id)
-            .single();
+            .eq("measurement_session_id", id);
 
-        if (sessionError || !session) {
-            return NextResponse.json({ error: "Measurement session not found" }, { status: 404 });
+        if (fetchError) {
+            console.error("Supabase fetch error:", fetchError);
+            return NextResponse.json({ error: "Failed to fetch existing shapes" }, { status: 500 });
+        }
+        const existingIds = new Set(existingShapes?.map((s) => s.id) || []);
+
+        // Dividing the shapes into new and updated ones
+        const shapesToUpsert = [];
+        const newShapes = [];
+        const updatedShapes = [];
+
+        for (const shape of shapes) {
+            if (shape.id && existingIds.has(shape.id)) {
+                // This is the shape for update
+                shapesToUpsert.push({
+                    id: shape.id,
+                    measurement_session_id: id,
+                    shape_type: shape.shape_type,
+                    label: shape.label || "",
+                    surface_type: shape.surface_type || "other",
+                    waste_percentage: shape.waste_percentage ?? 0,
+                    magnitude: shape.magnitude,
+                    points: shape.points,
+                    updated_at: new Date().toISOString(),
+                });
+                updatedShapes.push(shape.id);
+            } else {
+                // This is a new shape
+                newShapes.push({
+                    measurement_session_id: id,
+                    shape_type: shape.shape_type,
+                    label: shape.label || "",
+                    surface_type: shape.surface_type || "other",
+                    waste_percentage: shape.waste_percentage ?? 0,
+                    magnitude: shape.magnitude,
+                    points: shape.points,
+                });
+            }
         }
 
-        const shapesToInsert = shapes.map((shape: any) => ({
-            measurement_session_id: id,
-            shape_type: shape.shape_type,
-            label: shape.label || "",
-            surface_type: shape.surface_type || "other",
-            waste_percentage: shape.waste_percentage ?? 0,
-            magnitude: shape.magnitude,
-            points: shape.points,
-        }));
+        let upsertError = null;
+        let insertError = null;
 
-        const { error } = await supabaseAdmin.from("measurement_shapes").insert(shapesToInsert);
+        // Updating existing shapes (if any)
+        if (shapesToUpsert.length > 0) {
+            const { error } = await supabaseAdmin
+                .from("measurement_shapes")
+                .upsert(shapesToUpsert, { onConflict: "id", ignoreDuplicates: false });
 
-        if (error) {
-            console.error("Supabase insert error:", error);
-            return NextResponse.json({ error: "Failed to save shapes" }, { status: 500 });
+            if (error) {
+                upsertError = error;
+                console.error("Supabase upsert error:", error);
+            }
         }
 
-        return NextResponse.json({ success: true });
+        // Inserting new shapes (if any)
+        if (newShapes.length > 0) {
+            const { error } = await supabaseAdmin.from("measurement_shapes").insert(newShapes);
+
+            if (error) {
+                insertError = error;
+                console.error("Supabase insert error:", error);
+            }
+        }
+
+        if (upsertError || insertError) {
+            return NextResponse.json(
+                { error: "Failed to sync shapes", details: { upsertError, insertError } },
+                { status: 500 },
+            );
+        }
+
+        // Determine which shapes have been deleted (does not exist in the UI, but exists in the DB)
+        const currentIds = new Set(shapes.map((s) => s.id).filter((id) => id));
+        const idsToDelete =
+            existingIds.size > 0
+                ? [...existingIds].filter((existingId) => !currentIds.has(existingId))
+                : [];
+
+        if (idsToDelete.length > 0) {
+            const { error } = await supabaseAdmin
+                .from("measurement_shapes")
+                .delete()
+                .in("id", idsToDelete);
+
+            if (error) {
+                console.error("Supabase delete error:", error);
+                return NextResponse.json({ error: "Failed to delete old shapes" }, { status: 500 });
+            }
+        }
+
+        return NextResponse.json({
+            success: true,
+            message: "Shapes synced successfully",
+            created: newShapes.length,
+            updated: shapesToUpsert.length,
+            deleted: idsToDelete.length,
+            deleted_ids: idsToDelete,
+        });
     } catch (error) {
         console.error("Unexpected error in POST /shapes:", error);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -47,7 +124,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const params = await context.params; // ← await
+    const params = await context.params;
     const { id } = params;
 
     try {

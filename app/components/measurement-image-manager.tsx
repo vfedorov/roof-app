@@ -196,7 +196,7 @@ export default function MeasurementImageManager({
             (file) => ACCEPTED_TYPES.includes(file.type) && file.size <= MAX_FILE_SIZE,
         );
 
-        const originalCount = images.filter((p) => p.is_base_image === false).length;
+        const originalCount = images.filter((p) => !p.is_base_image).length;
         if (valid.length + originalCount > MAX_FILES) {
             toast({
                 title: `You can only upload up to ${MAX_FILES} total images.`,
@@ -237,6 +237,46 @@ export default function MeasurementImageManager({
         }
     };
 
+    const exportImageWithShapes = async (img: MeasurementImage) => {
+        if (!imageDimensions[img.id]) return;
+
+        const imgElement = document.querySelector(
+            `[data-image-id="${img.id}"]`,
+        ) as HTMLImageElement;
+        if (!imgElement) return;
+
+        const canvas = document.createElement("canvas");
+        const naturalWidth = imageDimensions[img.id].naturalWidth;
+        const naturalHeight = imageDimensions[img.id].naturalHeight;
+        canvas.width = naturalWidth;
+        canvas.height = naturalHeight;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        ctx.drawImage(imgElement, 0, 0, naturalWidth, naturalHeight);
+
+        const svgElement = imgElement.nextElementSibling as SVGSVGElement;
+        if (!svgElement) return;
+
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const svgBlob = new Blob([svgData], { type: "image/svg+xml" });
+        const svgUrl = URL.createObjectURL(svgBlob);
+
+        const svgImg: HTMLImageElement = new window.Image();
+        svgImg.src = svgUrl;
+
+        await svgImg.decode();
+
+        ctx.drawImage(svgImg, 0, 0, naturalWidth, naturalHeight);
+
+        URL.revokeObjectURL(svgUrl);
+
+        const link = document.createElement("a");
+        link.download = `measurement_${img.measurement_session_id}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    };
     // --------------------------------------------------
     // Set Base Image
     // --------------------------------------------------
@@ -304,13 +344,6 @@ export default function MeasurementImageManager({
         setWorkingAreaShapes([]);
         setShapes([]);
         setConfirmBaseImage(null);
-    };
-
-    const handleSetBaseImage = async (img: MeasurementImage) => {
-        if (img.is_base_image) return;
-
-        setConfirmBaseImage(img);
-        return;
     };
 
     // --------------------------------------------------
@@ -428,6 +461,8 @@ export default function MeasurementImageManager({
                             }`}
                             unoptimized
                             onLoad={(e) => handleImageLoad(img.id, e)}
+                            data-image-id={img.id}
+                            crossOrigin="anonymous"
                         />
 
                         {isBase && scalePoints.length > 0 && imageDimensions[img.id] && (
@@ -584,7 +619,6 @@ export default function MeasurementImageManager({
                                             ️📏 Edit Scale
                                         </button>
                                     )}
-
                                     {scale !== null && (
                                         <button
                                             type="button"
@@ -597,6 +631,16 @@ export default function MeasurementImageManager({
                                             ✏️ Draw
                                         </button>
                                     )}
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            exportImageWithShapes(img);
+                                        }}
+                                        className="hidden flex-1 text-sm border rounded py-1 text-center bg-gray-200 text-gray-700 export-base-image-btn"
+                                    >
+                                        💾 Export
+                                    </button>
                                 </>
                             ) : (
                                 <button

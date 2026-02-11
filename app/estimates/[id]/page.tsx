@@ -64,6 +64,43 @@ export default async function EstimateDetailPage({ params }: { params: Promise<{
         .eq("measurement_session_id", measurementSession.id);
 
     const costs = calculateEstimateCosts(estimateItems, shapes || []);
+
+    const handleGeneratePDF = async (estimateId: string) => {
+        try {
+            const sessionId = measurementSession.id;
+
+            const localStorageImage = localStorage.getItem(`measurement_${sessionId}`);
+
+            const response = await fetch(`/api/estimates/${estimateId}/report`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    localStorageImage: localStorageImage || null,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to generate PDF");
+            }
+
+            const blob = await response.blob();
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `estimate-${estimateId}.pdf`;
+            link.target = "_blank";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Error generating PDF:", error);
+            alert("Failed to generate PDF. Please try again.");
+        }
+    };
     return (
         <div className="page gap-6 p-6 max-w-6xl mx-auto">
             <div className="flex flex-col gap-6">

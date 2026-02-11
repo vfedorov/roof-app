@@ -109,7 +109,6 @@ export async function DELETE(request: NextRequest, context: any) {
         );
     }
 
-    // Получаем запись из БД
     const { data: imageRecord, error: fetchError } = await supabaseServer
         .from("measurement_images")
         .select("image_url, is_base_image")

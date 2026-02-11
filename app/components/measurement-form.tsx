@@ -124,10 +124,10 @@ export default function MeasurementForm({
         const measurementId = measurement?.id;
         if (!measurementId) return;
 
-        // const exportButton = document.querySelector(".export-base-image-btn") as HTMLButtonElement;
-        // if (exportButton) {
-        //     exportButton.click();
-        // }
+        const exportButton = document.querySelector(".export-base-image-btn") as HTMLButtonElement;
+        if (exportButton) {
+            exportButton.click();
+        }
 
         const localShapes = localStorage.getItem(`measurement_shapes_${measurementId}`);
         if (localShapes) {
@@ -144,13 +144,6 @@ export default function MeasurementForm({
 
                 const responseJson = await res.json();
 
-                // if (res.ok) {
-                //     localStorage.removeItem(`measurement_shapes_${measurementId}`);
-                //     toast({
-                //         title: "Success",
-                //         description: `Shapes synced: ${responseJson.created} created, ${responseJson.updated} updated, ${responseJson.deleted} deleted.`,
-                //     });
-                // } else
                 if (!res.ok) {
                     console.error("Shape sync error:", responseJson);
                     toast({

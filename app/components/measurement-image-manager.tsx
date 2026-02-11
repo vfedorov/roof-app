@@ -272,10 +272,36 @@ export default function MeasurementImageManager({
 
         URL.revokeObjectURL(svgUrl);
 
-        const link = document.createElement("a");
-        link.download = `measurement_${img.measurement_session_id}.png`;
-        link.href = canvas.toDataURL("image/png");
-        link.click();
+        const imageDataUrl = canvas.toDataURL("image/png");
+
+        try {
+            const response = await fetch(
+                `/api/measurements/${img.measurement_session_id}/base-image`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        imageDataUrl,
+                        imageId: img.id,
+                    }),
+                },
+            );
+
+            if (!response.ok) {
+                throw new Error("Failed to save base image to server");
+            }
+
+            const result = await response.json();
+            console.log("Base image saved successfully:", result.url);
+
+            return result;
+        } catch (error) {
+            console.error("Error saving base image:", error);
+            alert("Failed to save annotated image. Please try again.");
+            throw error;
+        }
     };
     // --------------------------------------------------
     // Set Base Image

@@ -101,8 +101,9 @@ interface MeasurementSummary {
         other: number;
     };
     otherAreaSqFt: number;
-    images: string[];
+    images: string[]; // Added for PDF
 }
+// --- HELPER FUNCTIONS ---
 
 // ---------------------------------------------------------------------------
 // DOWNLOAD + CACHE chromium-min ON VERCEL
@@ -181,6 +182,7 @@ async function getBrowser() {
 function computeMeasurementSummary(
     shapesD: ShapeDimension[],
     measurement_images: MeasurementImage[],
+    measurementSessionId: string | undefined,
 ): MeasurementSummary {
     const DAMAGE_TYPES = new Set(["roof damage", "siding damage"]);
     const LINEAR_TYPES = new Set(["trim", "ridge", "eave", "other"]);
@@ -198,7 +200,11 @@ function computeMeasurementSummary(
         other: 0,
     };
 
-    const images = measurement_images
+    const baseImageUrl = measurementSessionId
+        ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/measurement-images/measurements/${measurementSessionId}/base/measurement_${measurementSessionId}.png`
+        : null;
+
+    const regularImages = measurement_images
         .filter((img) => img.image_url)
         .sort((a, b) => {
             if (a.is_base_image && !b.is_base_image) return -1;
@@ -207,6 +213,12 @@ function computeMeasurementSummary(
         })
         .slice(0, MAX_PHOTOS_PER_ESTIMATE)
         .map((img) => img.image_url);
+
+    const images: string[] = [];
+    if (baseImageUrl) {
+        images.push(baseImageUrl);
+    }
+    images.push(...regularImages);
 
     for (const shapeD of shapesD) {
         if (DAMAGE_TYPES.has(shapeD.surface_type)) continue;
@@ -309,7 +321,11 @@ export async function GET(request: NextRequest, context: any) {
     const shapes = estimate.measurement_sessions?.measurement_shapes || [];
     const images = estimate.measurement_sessions?.measurement_images || [];
     const shapeDimension = extractDimensions(shapes);
-    const measurementSummary = computeMeasurementSummary(shapeDimension, images);
+    const measurementSummary = computeMeasurementSummary(
+        shapeDimension,
+        images,
+        estimate.measurement_session_id,
+    );
 
     const lineItemCosts = calculateEstimateCosts(estimate.estimate_items || [], shapes);
 
@@ -333,9 +349,9 @@ export async function GET(request: NextRequest, context: any) {
     const browser = await getBrowser();
     const page = await browser.newPage();
 
-    await page.setViewport({ width: 1200, height: 1800 });
+    await page.setViewport({ width: 1200, height: 1800 }); // Adjust viewport as needed
 
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    await page.setContent(html, { waitUntil: "networkidle0" }); // Wait for resources if needed
 
     const pdf = await page.pdf({
         format: "A4", // Or Letter
@@ -597,6 +613,7 @@ ${
             <th>Shape / Surface</th>
             <th>Assembly</th>
             <th>Type</th>
+<!--            <th>Pricing Unit</th>-->
             <th>Material Cost</th>
             <th>Labor Cost</th>
             <th>Total</th>
@@ -648,43 +665,46 @@ ${
 
     <!-- GRAND TOTALS -->
     <div class="totals-section no-page-break">    
-        <h2>Grand Totals</h2>
-        ${
-            categoryTotals.roof.total > 0
-                ? `
-        <hr>
-        <h3>Roof</h3>
-        <p><strong>$${categoryTotals.roof.total.toFixed(2)}</strong></p>
-        <p><strong>Material:</strong> $${categoryTotals.roof.material.toFixed(2)}</p>
-        <p><strong>Labor:</strong> $${categoryTotals.roof.labor.toFixed(2)}</p>`
-                : ""
-        }
-        ${
-            categoryTotals.siding.total > 0
-                ? `
-        <hr>       
-        <h3>Siding</h3>
-        <p><strong>$${categoryTotals.siding.total.toFixed(2)}</strong></p>
-        <p><strong>Material:</strong> $${categoryTotals.siding.material.toFixed(2)}</p>
-        <p><strong>Labor:</strong> $${categoryTotals.siding.labor.toFixed(2)}</p>`
-                : ""
-        }
-        ${
-            categoryTotals.linear.total > 0
-                ? `
-        <hr>
-        <h3>Linear</h3>
-        <p><strong>$${categoryTotals.linear.total.toFixed(2)}</strong></p>
-        <p><strong>Material:</strong> $${categoryTotals.linear.material.toFixed(2)}</p>
-        <p><strong>Labor:</strong> $${categoryTotals.linear.labor.toFixed(2)}</p>`
-                : ""
-        }
-        <hr>
-        <p><strong>Total Material Cost:</strong> $${totals.totalMaterialCost.toFixed(2)}</p>
-        <p><strong>Total Labor Cost:</strong> $${totals.totalLaborCost.toFixed(2)}</p>
-        <p style="font-size: 1.4em; font-weight: bold; color: #2d3748; margin-top: 10px;">
-          <strong>Grand Total:</strong> $${totals.totalCost.toFixed(2)}
-        </p>
+    <h2>Grand Totals</h2>
+    ${
+        categoryTotals.roof.total > 0
+            ? `
+    <hr>
+    <h3>Roof</h3>
+    <p><strong>$${categoryTotals.roof.total.toFixed(2)}</strong></p>
+    <p><strong>Material:</strong> $${categoryTotals.roof.material.toFixed(2)}</p>
+    <p><strong>Labor:</strong> $${categoryTotals.roof.labor.toFixed(2)}</p>
+    `
+            : ""
+    }
+    ${
+        categoryTotals.siding.total > 0
+            ? `
+    <hr>       
+    <h3>Siding</h3>
+    <p><strong>$${categoryTotals.siding.total.toFixed(2)}</strong></p>
+    <p><strong>Material:</strong> $${categoryTotals.siding.material.toFixed(2)}</p>
+    <p><strong>Labor:</strong> $${categoryTotals.siding.labor.toFixed(2)}</p>
+    `
+            : ""
+    }
+    ${
+        categoryTotals.linear.total > 0
+            ? `
+    <hr>
+    <h3>Linear</h3>
+    <p><strong>$${categoryTotals.linear.total.toFixed(2)}</strong></p>
+    <p><strong>Material:</strong> $${categoryTotals.linear.material.toFixed(2)}</p>
+    <p><strong>Labor:</strong> $${categoryTotals.linear.labor.toFixed(2)}</p>
+`
+            : ""
+    }
+    <hr>
+    <p><strong>Total Material Cost:</strong> $${totals.totalMaterialCost.toFixed(2)}</p>
+    <p><strong>Total Labor Cost:</strong> $${totals.totalLaborCost.toFixed(2)}</p>
+    <p style="font-size: 1.4em; font-weight: bold; color: #2d3748; margin-top: 10px;">
+      <strong>Grand Total:</strong> $${totals.totalCost.toFixed(2)}
+    </p>
     </div>
     
     <!-- FOOTER -->
